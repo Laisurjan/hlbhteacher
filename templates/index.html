@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師員額控管系統 - 節數總覽</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- 頁面頂部導覽列 -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>{{ settings.school_name | default('教師員額控管系統') }}</h1>
+        </div>
+        <div class="nav-links">
+            <a href="/" class="active">節數總覽</a>
+            <a href="/courses">課程管理</a>
+            <a href="/compare">年度比較</a>
+        </div>
+        <div class="nav-auth">
+            {% if is_admin %}
+            <span class="admin-badge">管理員模式</span>
+            <button id="logout-btn" class="btn btn-secondary">登出</button>
+            {% else %}
+            <button id="login-btn" class="btn btn-primary">教務主任登入</button>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- 主要內容區 -->
+    <main class="container">
+        <!-- 標題區塊 -->
+        <section class="page-header">
+            <h2>{{ teachers.school_year | default(113) }} 學年度 - 教師節數總覽</h2>
+            <p class="last-updated">最後更新：{{ teachers.last_updated | default('尚未更新') }}</p>
+
+            <!-- 模式切換 -->
+            <div class="mode-switch">
+                <span class="mode-label">計算模式：</span>
+                <div class="mode-buttons">
+                    <button id="mode-current" class="mode-btn active">本學年模式</button>
+                    <button id="mode-new-full" class="mode-btn">新學年(全專任)</button>
+                    <button id="mode-new-homeroom" class="mode-btn">新學年(全導師)</button>
+                </div>
+                <span class="mode-hint" id="mode-hint">依教師實際職務計算</span>
+            </div>
+
+            <p class="threshold-info">
+                <strong>人力判斷標準：</strong>差額 ≤ 17 節為人力足夠，差額 > 17 節為人力不足
+            </p>
+            <p class="hours-info">
+                <strong>基本鐘點規則：</strong>
+                國文/社會領域：專任14節、導師10節｜其他領域：專任16節、導師12節
+            </p>
+            <button id="presentation-mode-btn" class="btn btn-outline">會議展示模式</button>
+        </section>
+
+        <!-- 節數總覽表格 -->
+        <section class="summary-table-section">
+            <table class="summary-table" id="summary-table">
+                <thead>
+                    <tr>
+                        <th>領域/科別</th>
+                        <th>正式教師</th>
+                        <th>進修部</th>
+                        <th>代理教師(啟用)</th>
+                        <th>基本節數</th>
+                        <th>需求節數</th>
+                        <th>差額</th>
+                        <th>平均超鐘點</th>
+                        <th>人力狀態</th>
+                    </tr>
+                </thead>
+                <tbody id="summary-tbody">
+                    <!-- 由 JavaScript 動態生成 -->
+                </tbody>
+                <tfoot>
+                    <tr class="total-row">
+                        <td>合計</td>
+                        <td id="total-formal">-</td>
+                        <td id="total-evening">-</td>
+                        <td id="total-substitute">-</td>
+                        <td id="total-base">-</td>
+                        <td id="total-required">-</td>
+                        <td id="total-difference">-</td>
+                        <td>-</td>
+                        <td>-</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </section>
+
+        <!-- 說明區塊 -->
+        <section class="info-section">
+            <div class="info-card">
+                <h4>欄位說明</h4>
+                <ul>
+                    <li><strong>正式教師</strong>：含日間部及進修部正式教師</li>
+                    <li><strong>進修部</strong>：進修部授課為主之正式教師人數</li>
+                    <li><strong>代理教師(啟用)</strong>：目前啟用的代理教師數（點擊可管理）</li>
+                    <li><strong>需求節數</strong>：依課程管理頁面的總節數計算</li>
+                    <li><strong>差額</strong>：需求節數 - 基本節數</li>
+                    <li><strong>人力狀態</strong>：差額 ≤ 17節 為「人力足夠」，差額 > 17節 為「人力不足」</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 領域詳情區塊 -->
+        <section class="domain-details-section" id="domain-details" style="display: none;">
+            <h3 id="domain-details-title">領域詳情</h3>
+            <div id="domain-details-content"></div>
+            <button id="close-details-btn" class="btn btn-secondary">關閉</button>
+        </section>
+
+        <!-- 圖表區塊 -->
+        <section class="chart-section">
+            <h3>節數差額概覽</h3>
+            <div class="chart-container" id="difference-chart"></div>
+        </section>
+    </main>
+
+    <!-- 登入對話框 -->
+    <div class="modal" id="login-modal" style="display: none;">
+        <div class="modal-content">
+            <h3>教務主任登入</h3>
+            <p>請輸入管理密碼以進入編輯模式</p>
+            <input type="password" id="password-input" placeholder="請輸入密碼">
+            <div class="modal-buttons">
+                <button id="login-submit-btn" class="btn btn-primary">登入</button>
+                <button id="login-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+            <p id="login-error" class="error-message" style="display: none;"></p>
+        </div>
+    </div>
+
+    <!-- 教師管理對話框 -->
+    <div class="modal" id="teacher-modal" style="display: none;">
+        <div class="modal-content modal-large">
+            <h3 id="teacher-modal-title">教師管理</h3>
+            <div id="teacher-modal-content"></div>
+            <div class="modal-buttons">
+                <button id="teacher-save-btn" class="btn btn-primary">儲存變更</button>
+                <button id="teacher-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增教師對話框 -->
+    <div class="modal" id="add-teacher-modal" style="display: none;">
+        <div class="modal-content">
+            <h3 id="add-teacher-title">新增教師</h3>
+            <form id="add-teacher-form">
+                <div class="form-group">
+                    <label>教師類型</label>
+                    <select id="add-teacher-type">
+                        <option value="formal">正式教師</option>
+                        <option value="substitute">代理教師</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>姓名</label>
+                    <input type="text" id="add-teacher-name" required placeholder="請輸入教師姓名">
+                </div>
+                <div id="formal-fields">
+                    <div class="form-group">
+                        <label>職務</label>
+                        <select id="add-teacher-position">
+                            <option value="專任">專任</option>
+                            <option value="導師">導師</option>
+                            <option value="科主任">科主任 (7節)</option>
+                            <option value="組長">組長 (7節)</option>
+                            <option value="教學組長">教學組長 (5節)</option>
+                            <option value="生輔組長">生輔組長 (5節)</option>
+                            <option value="訓育組長">訓育組長 (5節)</option>
+                            <option value="註冊組長">註冊組長 (5節)</option>
+                            <option value="進修部組長">進修部組長 (6節)</option>
+                            <option value="特教業務承辦人">特教業務承辦人 (10節)</option>
+                            <option value="主任">主任 (1節)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="add-teacher-evening">
+                            進修部授課為主
+                        </label>
+                    </div>
+                    <p class="help-text">專任與導師節數依領域不同：國文/社會(專任14/導師10)，其他(專任16/導師12)</p>
+                </div>
+            </form>
+            <div class="modal-buttons">
+                <button id="add-teacher-submit" class="btn btn-primary">新增</button>
+                <button id="add-teacher-cancel" class="btn btn-secondary">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>教師員額控管系統 &copy; 2024</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // 全域變數
+        let teachersData = null;
+        let currentDomainId = null;
+        let currentMode = 'current'; // 'current', 'new-full', 'new-homeroom'
+        const isAdmin = {{ 'true' if is_admin else 'false' }};
+        const SHORTAGE_THRESHOLD = 17;  // 差額超過此值為人力不足
+
+        // 基本鐘點規則（本學年模式）- 國文/社會領域
+        const POSITION_HOURS_CHINESE = {
+            '主任': 1,
+            '教學組長': 5, '生輔組長': 5, '訓育組長': 5, '註冊組長': 5,
+            '進修部組長': 6, '組長': 7,
+            '科主任': 7,
+            '特教業務承辦人': 10, '特教業務': 10,
+            '導師': 10,
+            '專任': 14
+        };
+
+        // 基本鐘點規則（本學年模式）- 其他領域
+        const POSITION_HOURS_OTHER = {
+            '主任': 1,
+            '教學組長': 5, '生輔組長': 5, '訓育組長': 5, '註冊組長': 5,
+            '進修部組長': 6, '組長': 7,
+            '科主任': 7,
+            '特教業務承辦人': 10, '特教業務': 10,
+            '導師': 12,
+            '專任': 16
+        };
+
+        // 新學年模式的鐘點
+        const NEW_YEAR_HOURS = {
+            'chinese_social': { '專任': 14, '導師': 10 },
+            'default': { '專任': 16, '導師': 12 }
+        };
+
+        // 頁面載入
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadAllData();
+            renderSummaryTable();
+            renderChart();
+            setupEventListeners();
+            setupModeSwitch();
+        });
+
+        // 載入所有資料
+        async function loadAllData() {
+            // 同時載入教師和課程資料
+            const [teachersRes, coursesRes] = await Promise.all([
+                fetch('/api/teachers'),
+                fetch('/api/courses')
+            ]);
+            teachersData = await teachersRes.json();
+            const coursesData = await coursesRes.json();
+
+            // 從課程資料計算各領域需求節數
+            calculateRequiredHoursFromCourses(coursesData);
+        }
+
+        // 從課程資料計算各領域需求節數
+        // 說明：統計日間部和進修部的所有課程節數
+        function calculateRequiredHoursFromCourses(coursesData) {
+            const domainHours = {};
+
+            // 統計日間部課程
+            if (coursesData.day_school && coursesData.day_school.departments) {
+                coursesData.day_school.departments.forEach(function(dept) {
+                    if (dept.courses) {
+                        dept.courses.forEach(function(course) {
+                            const domain = course.domain || '其他';
+                            const hours = course.credits || 0;
+                            if (!domainHours[domain]) {
+                                domainHours[domain] = 0;
+                            }
+                            domainHours[domain] += hours;
+                        });
+                    }
+                });
+            }
+
+            // 統計進修部課程
+            if (coursesData.evening_school && coursesData.evening_school.departments) {
+                coursesData.evening_school.departments.forEach(function(dept) {
+                    if (dept.courses) {
+                        dept.courses.forEach(function(course) {
+                            const domain = course.domain || '其他';
+                            const hours = course.credits || 0;
+                            if (!domainHours[domain]) {
+                                domainHours[domain] = 0;
+                            }
+                            domainHours[domain] += hours;
+                        });
+                    }
+                });
+            }
+
+            // 領域對應關係
+            // 說明：teachers.json 的領域 ID 對應 courses.json 的領域名稱
+            const domainMapping = {
+                'chinese_social': '國文/社會',
+                'english': '英文',
+                'math': '數學',
+                'science': '自然',
+                'accounting': '會計',
+                'business': '商經',
+                'data_processing': '資處',
+                'multimedia': '多媒',
+                'arts': '美術',
+                'pe': '體育',
+                'health_career': '健康/生涯',
+                'defense': '國防'
+            };
+
+            // 更新 teachersData 中各領域的需求節數
+            teachersData.domains.forEach(function(domain) {
+                const domainName = domainMapping[domain.id] || domain.name;
+                if (domainHours[domainName] !== undefined) {
+                    domain.required_hours = domainHours[domainName];
+                }
+            });
+        }
+
+        // 設定模式切換
+        function setupModeSwitch() {
+            document.getElementById('mode-current').addEventListener('click', () => switchMode('current'));
+            document.getElementById('mode-new-full').addEventListener('click', () => switchMode('new-full'));
+            document.getElementById('mode-new-homeroom').addEventListener('click', () => switchMode('new-homeroom'));
+        }
+
+        // 切換模式
+        function switchMode(mode) {
+            currentMode = mode;
+
+            // 更新按鈕狀態
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            if (mode === 'current') {
+                document.getElementById('mode-current').classList.add('active');
+            } else if (mode === 'new-full') {
+                document.getElementById('mode-new-full').classList.add('active');
+            } else {
+                document.getElementById('mode-new-homeroom').classList.add('active');
+            }
+
+            // 更新提示文字
+            const hint = document.getElementById('mode-hint');
+            if (mode === 'current') {
+                hint.textContent = '依教師實際職務計算';
+            } else if (mode === 'new-full') {
+                hint.textContent = '全部正式教師以專任計算';
+            } else {
+                hint.textContent = '全部正式教師以導師計算';
+            }
+
+            // 重新渲染
+            renderSummaryTable();
+            renderChart();
+        }
+
+        // 計算領域的啟用代理教師數
+        function getEnabledSubstituteCount(domain) {
+            if (!domain.substitute_teachers) return 0;
+            return domain.substitute_teachers.filter(t => t.enabled).length;
+        }
+
+        // 取得教師的基本鐘點（根據模式和領域）
+        function getTeacherBaseHours(teacher, domainId) {
+            const isChinese = domainId === 'chinese_social';
+
+            if (currentMode === 'new-full') {
+                // 新學年模式（全專任）
+                return isChinese ? NEW_YEAR_HOURS['chinese_social']['專任'] : NEW_YEAR_HOURS['default']['專任'];
+            } else if (currentMode === 'new-homeroom') {
+                // 新學年模式（全導師）
+                return isChinese ? NEW_YEAR_HOURS['chinese_social']['導師'] : NEW_YEAR_HOURS['default']['導師'];
+            } else {
+                // 本學年模式：根據職務計算
+                const positionHours = isChinese ? POSITION_HOURS_CHINESE : POSITION_HOURS_OTHER;
+                const position = teacher.position || '專任';
+                // 去除括號內容，例如 "專任(留停)" -> "專任"
+                const cleanPosition = position.replace(/\(.*\)/, '').trim();
+                return positionHours[cleanPosition] || positionHours['專任'];
+            }
+        }
+
+        // 計算領域的基本節數（正式教師 + 啟用的代理教師）
+        function calculateBaseHours(domain) {
+            let total = 0;
+
+            // 計算正式教師的基本節數
+            if (domain.formal_teachers) {
+                total += domain.formal_teachers.reduce((sum, t) => {
+                    // 留停的教師不計入
+                    if (t.position && t.position.includes('留停')) return sum;
+                    return sum + getTeacherBaseHours(t, domain.id);
+                }, 0);
+            }
+
+            // 計算啟用的代理教師基本節數（以專任計算）
+            if (domain.substitute_teachers) {
+                const isChinese = domain.id === 'chinese_social';
+                const subBaseHours = isChinese ? 14 : 16; // 代理教師以專任計算
+                total += domain.substitute_teachers.reduce((sum, t) => {
+                    if (!t.enabled) return sum; // 停用的不計入
+                    return sum + subBaseHours;
+                }, 0);
+            }
+
+            return total;
+        }
+
+        // 渲染總覽表格
+        function renderSummaryTable() {
+            const tbody = document.getElementById('summary-tbody');
+            tbody.innerHTML = '';
+
+            let totalFormal = 0, totalEvening = 0, totalSubstitute = 0;
+            let totalBase = 0, totalRequired = 0;
+
+            teachersData.domains.forEach(domain => {
+                const formalCount = domain.formal_teachers ? domain.formal_teachers.length : 0;
+                const eveningCount = domain.formal_teachers ?
+                    domain.formal_teachers.filter(t => t.is_evening).length : 0;
+                const enabledSubCount = getEnabledSubstituteCount(domain);
+                const totalSubCount = domain.substitute_teachers ? domain.substitute_teachers.length : 0;
+
+                const baseHours = calculateBaseHours(domain);
+                const requiredHours = domain.required_hours || 0;
+                const difference = requiredHours - baseHours;
+
+                const totalTeachers = formalCount + enabledSubCount;
+                const avgOvertime = totalTeachers > 0 && difference > 0 ?
+                    (difference / totalTeachers).toFixed(1) : 0;
+
+                // 人力狀態判斷：差額 > 17 為人力不足
+                let status, statusClass;
+                if (difference <= 0) {
+                    status = '人力充裕'; statusClass = 'surplus';
+                } else if (difference <= SHORTAGE_THRESHOLD) {
+                    status = '人力足夠'; statusClass = 'balanced';
+                } else {
+                    status = '人力不足'; statusClass = 'shortage';
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = 'domain-row';
+                tr.dataset.domainId = domain.id;
+                tr.innerHTML = `
+                    <td class="domain-name">${domain.name}</td>
+                    <td class="formal-count">
+                        <strong>${formalCount}</strong>
+                        ${eveningCount > 0 ? `<span class="evening-badge">含進${eveningCount}</span>` : ''}
+                    </td>
+                    <td class="evening-count">${eveningCount}</td>
+                    <td class="substitute-count">
+                        ${totalSubCount > 0 ?
+                            `<span class="substitute-badge">${enabledSubCount}/${totalSubCount}</span>` :
+                            '<span class="no-substitute">0</span>'}
+                        ${isAdmin ? `<button class="btn btn-small btn-outline manage-btn" data-domain-id="${domain.id}">管理</button>` : ''}
+                    </td>
+                    <td class="base-hours">${baseHours}</td>
+                    <td class="required-hours">${requiredHours}</td>
+                    <td class="difference ${difference > 0 ? 'shortage' : (difference < 0 ? 'surplus' : '')}">
+                        ${difference > 0 ? '+' : ''}${difference}
+                    </td>
+                    <td class="avg-overtime">${avgOvertime}</td>
+                    <td class="status"><span class="status-badge ${statusClass}">${status}</span></td>
+                `;
+                tbody.appendChild(tr);
+
+                totalFormal += formalCount;
+                totalEvening += eveningCount;
+                totalSubstitute += enabledSubCount;
+                totalBase += baseHours;
+                totalRequired += requiredHours;
+            });
+
+            // 更新合計
+            document.getElementById('total-formal').textContent = totalFormal;
+            document.getElementById('total-evening').textContent = totalEvening;
+            document.getElementById('total-substitute').textContent = totalSubstitute;
+            document.getElementById('total-base').textContent = totalBase;
+            document.getElementById('total-required').textContent = totalRequired;
+
+            const totalDiff = totalRequired - totalBase;
+            const diffEl = document.getElementById('total-difference');
+            diffEl.textContent = (totalDiff > 0 ? '+' : '') + totalDiff;
+            diffEl.className = totalDiff > 0 ? 'shortage' : (totalDiff < 0 ? 'surplus' : '');
+        }
+
+        // 渲染長條圖
+        function renderChart() {
+            const container = document.getElementById('difference-chart');
+            container.innerHTML = '';
+
+            teachersData.domains.forEach(domain => {
+                const baseHours = calculateBaseHours(domain);
+                const difference = (domain.required_hours || 0) - baseHours;
+                const barWidth = Math.min(Math.abs(difference) / 20 * 100, 100);
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'chart-bar-wrapper';
+                wrapper.innerHTML = `
+                    <span class="chart-label">${domain.name}</span>
+                    <div class="chart-bar-container">
+                        <div class="chart-bar ${difference > 0 ? 'shortage' : (difference < 0 ? 'surplus' : '')}"
+                             style="width: ${barWidth}%;">
+                            ${difference > 0 ? '+' : ''}${difference}
+                        </div>
+                    </div>
+                `;
+                container.appendChild(wrapper);
+            });
+        }
+
+        // 設定事件監聽
+        function setupEventListeners() {
+            // 點擊領域列顯示詳情
+            document.getElementById('summary-tbody').addEventListener('click', function(e) {
+                const row = e.target.closest('.domain-row');
+                if (!row) return;
+
+                // 如果點擊的是管理按鈕
+                if (e.target.classList.contains('manage-btn')) {
+                    openTeacherModal(e.target.dataset.domainId);
+                    return;
+                }
+
+                showDomainDetails(row.dataset.domainId);
+            });
+
+            // 關閉詳情
+            document.getElementById('close-details-btn').addEventListener('click', () => {
+                document.getElementById('domain-details').style.display = 'none';
+            });
+
+            // 教師管理對話框
+            document.getElementById('teacher-cancel-btn').addEventListener('click', closeTeacherModal);
+            document.getElementById('teacher-save-btn').addEventListener('click', saveTeacherChanges);
+
+            // 新增教師對話框
+            document.getElementById('add-teacher-type').addEventListener('change', function() {
+                document.getElementById('formal-fields').style.display =
+                    this.value === 'formal' ? 'block' : 'none';
+            });
+            document.getElementById('add-teacher-cancel').addEventListener('click', closeAddTeacherModal);
+            document.getElementById('add-teacher-submit').addEventListener('click', submitAddTeacher);
+        }
+
+        // 顯示領域詳情（只讀）
+        function showDomainDetails(domainId) {
+            const domain = teachersData.domains.find(d => d.id === domainId);
+            if (!domain) return;
+
+            document.getElementById('domain-details-title').textContent = domain.name + ' - 教師列表';
+
+            let html = '';
+
+            // 正式教師
+            if (domain.formal_teachers && domain.formal_teachers.length > 0) {
+                html += '<h4>正式教師</h4>';
+                html += '<table class="teachers-table"><thead><tr>';
+                html += '<th>姓名</th><th>職務</th><th>進修部</th><th>基本節數</th>';
+                html += '</tr></thead><tbody>';
+                domain.formal_teachers.forEach(t => {
+                    html += `<tr>
+                        <td>${t.name}</td>
+                        <td>${t.position || '-'}</td>
+                        <td>${t.is_evening ? '✓' : ''}</td>
+                        <td>${t.base_hours}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+
+            // 代理教師
+            if (domain.substitute_teachers && domain.substitute_teachers.length > 0) {
+                html += '<h4>代理教師</h4>';
+                html += '<table class="teachers-table"><thead><tr>';
+                html += '<th>姓名</th><th>啟用狀態</th>';
+                html += '</tr></thead><tbody>';
+                domain.substitute_teachers.forEach(t => {
+                    html += `<tr class="${t.enabled ? '' : 'disabled-row'}">
+                        <td>${t.name}</td>
+                        <td>${t.enabled ? '✓ 啟用' : '✗ 停用'}</td>
+                    </tr>`;
+                });
+                html += '</tbody></table>';
+            }
+
+            if (domain.note) {
+                html += `<p class="domain-note">備註：${domain.note}</p>`;
+            }
+
+            document.getElementById('domain-details-content').innerHTML = html;
+            document.getElementById('domain-details').style.display = 'block';
+        }
+
+        // 開啟教師管理對話框
+        function openTeacherModal(domainId) {
+            currentDomainId = domainId;
+            const domain = teachersData.domains.find(d => d.id === domainId);
+            if (!domain) return;
+
+            document.getElementById('teacher-modal-title').textContent = domain.name + ' - 教師管理';
+
+            let html = '';
+
+            // 職務選項
+            const positionOptions = [
+                '專任', '導師', '科主任', '組長', '教學組長', '生輔組長',
+                '訓育組長', '註冊組長', '進修部組長', '特教業務承辦人', '主任'
+            ];
+
+            // 正式教師區塊
+            html += '<div class="teacher-section">';
+            html += '<h4>正式教師 <button class="btn btn-small btn-primary add-formal-btn">+ 新增</button></h4>';
+            html += '<table class="teachers-table editable-table"><thead><tr>';
+            html += '<th>姓名</th><th>職務</th><th>進修部</th><th>基本節數</th><th>操作</th>';
+            html += '</tr></thead><tbody id="formal-teachers-list">';
+
+            if (domain.formal_teachers) {
+                domain.formal_teachers.forEach((t, i) => {
+                    const currentPos = t.position || '專任';
+                    const posSelect = positionOptions.map(pos =>
+                        `<option value="${pos}" ${pos === currentPos ? 'selected' : ''}>${pos}</option>`
+                    ).join('');
+                    const baseHours = getTeacherBaseHours(t, domain.id);
+
+                    html += `<tr data-index="${i}" data-type="formal">
+                        <td>${t.name}</td>
+                        <td><select class="position-select">${posSelect}</select></td>
+                        <td><input type="checkbox" class="is-evening" ${t.is_evening ? 'checked' : ''}></td>
+                        <td class="calc-base-hours">${baseHours}</td>
+                        <td><button class="btn btn-small btn-danger delete-teacher-btn">刪除</button></td>
+                    </tr>`;
+                });
+            }
+            html += '</tbody></table></div>';
+
+            // 代理教師區塊
+            html += '<div class="teacher-section">';
+            html += '<h4>代理教師 <button class="btn btn-small btn-primary add-substitute-btn">+ 新增</button></h4>';
+            html += '<table class="teachers-table editable-table"><thead><tr>';
+            html += '<th>啟用</th><th>姓名</th><th>操作</th>';
+            html += '</tr></thead><tbody id="substitute-teachers-list">';
+
+            if (domain.substitute_teachers) {
+                domain.substitute_teachers.forEach((t, i) => {
+                    html += `<tr data-index="${i}" data-type="substitute">
+                        <td><input type="checkbox" class="substitute-enabled" ${t.enabled ? 'checked' : ''}></td>
+                        <td>${t.name}</td>
+                        <td><button class="btn btn-small btn-danger delete-teacher-btn">刪除</button></td>
+                    </tr>`;
+                });
+            }
+            html += '</tbody></table></div>';
+
+            // 備註
+            html += `<div class="form-group">
+                <label>備註</label>
+                <textarea id="domain-note" rows="2">${domain.note || ''}</textarea>
+            </div>`;
+
+            document.getElementById('teacher-modal-content').innerHTML = html;
+
+            // 綁定新增按鈕事件
+            document.querySelector('.add-formal-btn').addEventListener('click', () => openAddTeacherModal('formal'));
+            document.querySelector('.add-substitute-btn').addEventListener('click', () => openAddTeacherModal('substitute'));
+
+            // 綁定刪除按鈕事件
+            document.querySelectorAll('.delete-teacher-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    if (confirm('確定要刪除這位教師嗎？')) {
+                        this.closest('tr').remove();
+                    }
+                });
+            });
+
+            // 綁定職務變更事件（自動更新基本節數）
+            document.querySelectorAll('.position-select').forEach(select => {
+                select.addEventListener('change', function() {
+                    const row = this.closest('tr');
+                    const index = parseInt(row.dataset.index);
+                    if (isNaN(index)) return;
+
+                    const teacher = domain.formal_teachers[index];
+                    if (!teacher) return;
+
+                    // 臨時更新職務以計算基本節數
+                    const tempTeacher = {...teacher, position: this.value};
+                    const baseHours = getTeacherBaseHours(tempTeacher, domain.id);
+                    row.querySelector('.calc-base-hours').textContent = baseHours;
+                });
+            });
+
+            document.getElementById('teacher-modal').style.display = 'flex';
+        }
+
+        // 關閉教師管理對話框
+        function closeTeacherModal() {
+            document.getElementById('teacher-modal').style.display = 'none';
+            currentDomainId = null;
+        }
+
+        // 儲存教師變更
+        async function saveTeacherChanges() {
+            if (!currentDomainId) return;
+
+            const domain = teachersData.domains.find(d => d.id === currentDomainId);
+            if (!domain) return;
+
+            // 收集正式教師資料（包含修改的職務和進修部狀態）
+            const formalRows = document.querySelectorAll('#formal-teachers-list tr');
+            const newFormalTeachers = [];
+            formalRows.forEach(row => {
+                const index = parseInt(row.dataset.index);
+                if (!isNaN(index) && domain.formal_teachers[index]) {
+                    const teacher = {...domain.formal_teachers[index]};
+                    // 更新職務
+                    const posSelect = row.querySelector('.position-select');
+                    if (posSelect) {
+                        teacher.position = posSelect.value;
+                    }
+                    // 更新進修部狀態
+                    const eveningCheck = row.querySelector('.is-evening');
+                    if (eveningCheck) {
+                        teacher.is_evening = eveningCheck.checked;
+                    }
+                    // 重新計算基本節數
+                    teacher.base_hours = getTeacherBaseHours(teacher, currentDomainId);
+                    newFormalTeachers.push(teacher);
+                }
+            });
+
+            // 收集代理教師資料
+            const subRows = document.querySelectorAll('#substitute-teachers-list tr');
+            const newSubstituteTeachers = [];
+            subRows.forEach(row => {
+                const index = parseInt(row.dataset.index);
+                if (!isNaN(index) && domain.substitute_teachers[index]) {
+                    const teacher = {...domain.substitute_teachers[index]};
+                    teacher.enabled = row.querySelector('.substitute-enabled').checked;
+                    newSubstituteTeachers.push(teacher);
+                }
+            });
+
+            // 備註
+            const note = document.getElementById('domain-note').value;
+
+            // 發送 API 請求
+            try {
+                const response = await fetch(`/api/domain/${currentDomainId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        formal_teachers: newFormalTeachers,
+                        substitute_teachers: newSubstituteTeachers,
+                        note: note
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('儲存成功！');
+                    closeTeacherModal();
+                    await loadAllData();
+                    renderSummaryTable();
+                    renderChart();
+                } else {
+                    alert('儲存失敗：' + result.message);
+                }
+            } catch (error) {
+                alert('網路錯誤');
+            }
+        }
+
+        // 開啟新增教師對話框
+        function openAddTeacherModal(type) {
+            document.getElementById('add-teacher-title').textContent =
+                type === 'formal' ? '新增正式教師' : '新增代理教師';
+            document.getElementById('add-teacher-type').value = type;
+            document.getElementById('formal-fields').style.display =
+                type === 'formal' ? 'block' : 'none';
+            document.getElementById('add-teacher-name').value = '';
+            document.getElementById('add-teacher-evening').checked = false;
+            document.getElementById('add-teacher-modal').style.display = 'flex';
+        }
+
+        // 關閉新增教師對話框
+        function closeAddTeacherModal() {
+            document.getElementById('add-teacher-modal').style.display = 'none';
+        }
+
+        // 提交新增教師
+        function submitAddTeacher() {
+            const name = document.getElementById('add-teacher-name').value.trim();
+            if (!name) {
+                alert('請輸入教師姓名');
+                return;
+            }
+
+            const type = document.getElementById('add-teacher-type').value;
+            const domain = teachersData.domains.find(d => d.id === currentDomainId);
+            if (!domain) return;
+
+            if (type === 'formal') {
+                const position = document.getElementById('add-teacher-position').value;
+                const isEvening = document.getElementById('add-teacher-evening').checked;
+                const isChinese = currentDomainId === 'chinese_social';
+                const positionHours = isChinese ? POSITION_HOURS_CHINESE : POSITION_HOURS_OTHER;
+                const baseHours = positionHours[position] || (isChinese ? 14 : 16);
+
+                if (!domain.formal_teachers) domain.formal_teachers = [];
+                domain.formal_teachers.push({
+                    name: name,
+                    position: position,
+                    is_evening: isEvening,
+                    base_hours: baseHours
+                });
+
+                // 更新表格
+                const tbody = document.getElementById('formal-teachers-list');
+                const index = domain.formal_teachers.length - 1;
+                const tr = document.createElement('tr');
+                tr.dataset.index = index;
+                tr.dataset.type = 'formal';
+                tr.innerHTML = `
+                    <td>${name}</td>
+                    <td>${position}</td>
+                    <td>${isEvening ? '✓' : ''}</td>
+                    <td>${baseHours}</td>
+                    <td><button class="btn btn-small btn-danger delete-teacher-btn">刪除</button></td>
+                `;
+                tr.querySelector('.delete-teacher-btn').addEventListener('click', function() {
+                    if (confirm('確定要刪除這位教師嗎？')) {
+                        this.closest('tr').remove();
+                    }
+                });
+                tbody.appendChild(tr);
+
+            } else {
+                if (!domain.substitute_teachers) domain.substitute_teachers = [];
+                domain.substitute_teachers.push({
+                    name: name,
+                    enabled: true,
+                    base_hours: 0
+                });
+
+                // 更新表格
+                const tbody = document.getElementById('substitute-teachers-list');
+                const index = domain.substitute_teachers.length - 1;
+                const tr = document.createElement('tr');
+                tr.dataset.index = index;
+                tr.dataset.type = 'substitute';
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="substitute-enabled" checked></td>
+                    <td>${name}</td>
+                    <td><button class="btn btn-small btn-danger delete-teacher-btn">刪除</button></td>
+                `;
+                tr.querySelector('.delete-teacher-btn').addEventListener('click', function() {
+                    if (confirm('確定要刪除這位教師嗎？')) {
+                        this.closest('tr').remove();
+                    }
+                });
+                tbody.appendChild(tr);
+            }
+
+            closeAddTeacherModal();
+        }
+    </script>
+</body>
+</html>

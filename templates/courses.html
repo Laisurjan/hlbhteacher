@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師員額控管系統 - 課程管理</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>{{ settings.school_name | default('教師員額控管系統') }}</h1>
+        </div>
+        <div class="nav-links">
+            <a href="/">節數總覽</a>
+            <a href="/courses" class="active">課程管理</a>
+            <a href="/compare">年度比較</a>
+        </div>
+        <div class="nav-auth">
+            {% if is_admin %}
+            <span class="admin-badge">管理員模式</span>
+            <button id="logout-btn" class="btn btn-secondary">登出</button>
+            {% else %}
+            <button id="login-btn" class="btn btn-primary">教務主任登入</button>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="container">
+        <section class="page-header">
+            <h2>{{ courses.school_year | default(113) }} 學年度 - 課程管理</h2>
+            <p class="last-updated">最後更新：{{ courses.last_updated | default('尚未更新') }}</p>
+        </section>
+
+        <!-- 日間部/進修部 切換 -->
+        <section class="tabs-section">
+            <div class="tabs school-tabs" id="school-tabs">
+                <button class="tab-btn school-tab active" data-school="day">日間部</button>
+                <button class="tab-btn school-tab" data-school="evening">進修部</button>
+            </div>
+        </section>
+
+        <!-- 科系分頁標籤 -->
+        <section class="tabs-section sub-tabs">
+            <div class="tabs" id="department-tabs">
+                <!-- 動態生成 -->
+            </div>
+        </section>
+
+        <!-- 課程內容區 -->
+        <section class="courses-section" id="courses-content">
+            <!-- 動態生成 -->
+        </section>
+
+        <!-- 各領域節數統計 -->
+        <section class="stats-section">
+            <h3>各領域總需求節數（日間部 + 進修部）</h3>
+            <div class="stats-grid" id="domain-stats">
+                <!-- 動態生成 -->
+            </div>
+        </section>
+    </main>
+
+    <!-- 登入對話框 -->
+    <div class="modal" id="login-modal" style="display: none;">
+        <div class="modal-content">
+            <h3>教務主任登入</h3>
+            <p>請輸入管理密碼以進入編輯模式</p>
+            <input type="password" id="password-input" placeholder="請輸入密碼">
+            <div class="modal-buttons">
+                <button id="login-submit-btn" class="btn btn-primary">登入</button>
+                <button id="login-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+            <p id="login-error" class="error-message" style="display: none;"></p>
+        </div>
+    </div>
+
+    <!-- 新增/編輯課程對話框 -->
+    <div class="modal" id="course-modal" style="display: none;">
+        <div class="modal-content">
+            <h3 id="course-modal-title">新增課程</h3>
+            <form id="course-form">
+                <div class="form-group">
+                    <label>課程名稱</label>
+                    <input type="text" id="course-name" required placeholder="請輸入課程名稱">
+                </div>
+                <div class="form-group">
+                    <label>教學領域</label>
+                    <select id="course-domain">
+                        <option value="國文/社會">國文/社會</option>
+                        <option value="英文">英文</option>
+                        <option value="數學">數學</option>
+                        <option value="自然">自然</option>
+                        <option value="會計">會計</option>
+                        <option value="商經">商經</option>
+                        <option value="資處">資處</option>
+                        <option value="多媒">多媒</option>
+                        <option value="美術">美術</option>
+                        <option value="體育">體育</option>
+                        <option value="健康/生涯">健康/生涯</option>
+                        <option value="國防">國防</option>
+                        <option value="其他">其他</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>一上</label>
+                        <input type="number" id="course-1-1" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>一下</label>
+                        <input type="number" id="course-1-2" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>二上</label>
+                        <input type="number" id="course-2-1" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>二下</label>
+                        <input type="number" id="course-2-2" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>三上</label>
+                        <input type="number" id="course-3-1" min="0" value="0">
+                    </div>
+                    <div class="form-group">
+                        <label>三下</label>
+                        <input type="number" id="course-3-2" min="0" value="0">
+                    </div>
+                </div>
+            </form>
+            <div class="modal-buttons">
+                <button id="course-save-btn" class="btn btn-primary">儲存</button>
+                <button id="course-cancel-btn" class="btn btn-secondary">取消</button>
+                <button id="course-delete-btn" class="btn btn-danger" style="display: none;">刪除</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>教師員額控管系統 &copy; 2024</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // ============================================================
+        // 全域變數
+        // ============================================================
+        let coursesData = null;        // 課程資料
+        let currentSchool = 'day';     // 目前選擇的學部（day 或 evening）
+        let currentDeptId = null;      // 目前選擇的科系
+        let editingCourseIndex = -1;   // 編輯中的課程索引（-1 表示新增）
+        const isAdmin = {{ 'true' if is_admin else 'false' }};
+
+        // ============================================================
+        // 頁面載入
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 載入課程資料
+            await loadCoursesData();
+
+            // 渲染頁面
+            renderDepartmentTabs();
+            renderDomainStats();
+
+            // 設定事件監聽
+            setupEventListeners();
+        });
+
+        // ============================================================
+        // 資料載入
+        // ============================================================
+
+        // 載入課程資料
+        async function loadCoursesData() {
+            const response = await fetch('/api/courses');
+            coursesData = await response.json();
+        }
+
+        // 取得目前學部的科系列表
+        function getCurrentDepartments() {
+            if (currentSchool === 'day') {
+                return coursesData.day_school?.departments || [];
+            } else {
+                return coursesData.evening_school?.departments || [];
+            }
+        }
+
+        // ============================================================
+        // 頁面渲染
+        // ============================================================
+
+        // 渲染科系分頁
+        function renderDepartmentTabs() {
+            const departments = getCurrentDepartments();
+            const tabsContainer = document.getElementById('department-tabs');
+            tabsContainer.innerHTML = '';
+
+            // 如果沒有科系資料
+            if (departments.length === 0) {
+                tabsContainer.innerHTML = '<p>尚無科系資料</p>';
+                document.getElementById('courses-content').innerHTML = '';
+                return;
+            }
+
+            // 建立科系分頁按鈕
+            departments.forEach((dept, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'tab-btn sub-tab';
+                if (index === 0) {
+                    btn.classList.add('active');
+                }
+                btn.dataset.deptId = dept.id;
+                btn.textContent = dept.name;
+                btn.addEventListener('click', function() {
+                    selectDept(dept.id);
+                });
+                tabsContainer.appendChild(btn);
+            });
+
+            // 選擇第一個科系
+            if (departments.length > 0) {
+                selectDept(departments[0].id);
+            }
+        }
+
+        // 選擇科系
+        function selectDept(deptId) {
+            currentDeptId = deptId;
+
+            // 更新分頁按鈕狀態
+            const tabs = document.querySelectorAll('#department-tabs .tab-btn');
+            tabs.forEach(function(btn) {
+                if (btn.dataset.deptId === deptId) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+
+            // 渲染課程
+            renderCourses();
+        }
+
+        // 渲染課程列表
+        function renderCourses() {
+            const departments = getCurrentDepartments();
+            const dept = departments.find(function(d) {
+                return d.id === currentDeptId;
+            });
+
+            if (!dept) {
+                return;
+            }
+
+            const container = document.getElementById('courses-content');
+            let html = '';
+
+            // 標題區
+            html += '<div class="dept-content active">';
+            html += '<div class="dept-header">';
+            html += '<h3>' + dept.name + '</h3>';
+            if (isAdmin) {
+                html += '<button class="btn btn-primary add-course-btn">+ 新增課程</button>';
+            }
+            html += '</div>';
+
+            // 課程列表
+            if (dept.courses && dept.courses.length > 0) {
+                // 依領域分組
+                const coursesByDomain = {};
+                dept.courses.forEach(function(course, index) {
+                    const domain = course.domain || '其他';
+                    if (!coursesByDomain[domain]) {
+                        coursesByDomain[domain] = [];
+                    }
+                    // 複製課程並加上索引
+                    const courseWithIndex = Object.assign({}, course);
+                    courseWithIndex._index = index;
+                    coursesByDomain[domain].push(courseWithIndex);
+                });
+
+                // 渲染每個領域
+                for (const domain in coursesByDomain) {
+                    const courses = coursesByDomain[domain];
+                    html += '<h4 class="domain-header">' + domain + '</h4>';
+                    html += '<table class="courses-table">';
+                    html += '<thead><tr>';
+                    html += '<th>課程名稱</th>';
+                    html += '<th>一上</th><th>一下</th>';
+                    html += '<th>二上</th><th>二下</th>';
+                    html += '<th>三上</th><th>三下</th>';
+                    html += '<th>總節數</th>';
+                    if (isAdmin) {
+                        html += '<th>操作</th>';
+                    }
+                    html += '</tr></thead><tbody>';
+
+                    courses.forEach(function(course) {
+                        const s = course.semesters || {};
+                        html += '<tr data-index="' + course._index + '">';
+                        html += '<td>' + course.name + '</td>';
+                        html += '<td>' + (s['1-1'] || '-') + '</td>';
+                        html += '<td>' + (s['1-2'] || '-') + '</td>';
+                        html += '<td>' + (s['2-1'] || '-') + '</td>';
+                        html += '<td>' + (s['2-2'] || '-') + '</td>';
+                        html += '<td>' + (s['3-1'] || '-') + '</td>';
+                        html += '<td>' + (s['3-2'] || '-') + '</td>';
+                        html += '<td><strong>' + (course.credits || 0) + '</strong></td>';
+                        if (isAdmin) {
+                            html += '<td><button class="btn btn-small btn-outline edit-course-btn" data-index="' + course._index + '">編輯</button></td>';
+                        }
+                        html += '</tr>';
+                    });
+
+                    html += '</tbody></table>';
+                }
+
+                // 總節數
+                let totalCredits = 0;
+                dept.courses.forEach(function(c) {
+                    totalCredits += c.credits || 0;
+                });
+                html += '<p class="total-credits">總節數：<strong>' + totalCredits + '</strong></p>';
+
+            } else {
+                html += '<div class="empty-state"><p>尚無課程資料</p></div>';
+            }
+
+            html += '</div>';
+            container.innerHTML = html;
+
+            // 綁定按鈕事件
+            if (isAdmin) {
+                const addBtn = container.querySelector('.add-course-btn');
+                if (addBtn) {
+                    addBtn.addEventListener('click', function() {
+                        openCourseModal(-1);
+                    });
+                }
+
+                const editBtns = container.querySelectorAll('.edit-course-btn');
+                editBtns.forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        const index = parseInt(btn.dataset.index);
+                        openCourseModal(index);
+                    });
+                });
+            }
+        }
+
+        // 渲染領域統計（日間部 + 進修部）
+        function renderDomainStats() {
+            const statsContainer = document.getElementById('domain-stats');
+            const domainTotals = {};
+
+            // 統計日間部
+            if (coursesData.day_school && coursesData.day_school.departments) {
+                coursesData.day_school.departments.forEach(function(dept) {
+                    if (dept.courses) {
+                        dept.courses.forEach(function(course) {
+                            const domain = course.domain || '其他';
+                            if (!domainTotals[domain]) {
+                                domainTotals[domain] = 0;
+                            }
+                            domainTotals[domain] += course.credits || 0;
+                        });
+                    }
+                });
+            }
+
+            // 統計進修部
+            if (coursesData.evening_school && coursesData.evening_school.departments) {
+                coursesData.evening_school.departments.forEach(function(dept) {
+                    if (dept.courses) {
+                        dept.courses.forEach(function(course) {
+                            const domain = course.domain || '其他';
+                            if (!domainTotals[domain]) {
+                                domainTotals[domain] = 0;
+                            }
+                            domainTotals[domain] += course.credits || 0;
+                        });
+                    }
+                });
+            }
+
+            // 渲染統計卡片
+            let html = '';
+            const sortedDomains = Object.keys(domainTotals).sort(function(a, b) {
+                return domainTotals[b] - domainTotals[a];
+            });
+
+            sortedDomains.forEach(function(domain) {
+                if (domain) {
+                    html += '<div class="stat-card">';
+                    html += '<h4>' + domain + '</h4>';
+                    html += '<div class="stat-diff">' + domainTotals[domain] + ' 節</div>';
+                    html += '</div>';
+                }
+            });
+
+            statsContainer.innerHTML = html || '<p>尚無統計資料</p>';
+        }
+
+        // ============================================================
+        // 課程編輯
+        // ============================================================
+
+        // 開啟課程對話框
+        function openCourseModal(index) {
+            editingCourseIndex = index;
+            const departments = getCurrentDepartments();
+            const dept = departments.find(function(d) {
+                return d.id === currentDeptId;
+            });
+
+            if (index >= 0 && dept && dept.courses[index]) {
+                // 編輯模式
+                const course = dept.courses[index];
+                const s = course.semesters || {};
+                document.getElementById('course-modal-title').textContent = '編輯課程';
+                document.getElementById('course-name').value = course.name;
+                document.getElementById('course-domain').value = course.domain || '其他';
+                document.getElementById('course-1-1').value = s['1-1'] || 0;
+                document.getElementById('course-1-2').value = s['1-2'] || 0;
+                document.getElementById('course-2-1').value = s['2-1'] || 0;
+                document.getElementById('course-2-2').value = s['2-2'] || 0;
+                document.getElementById('course-3-1').value = s['3-1'] || 0;
+                document.getElementById('course-3-2').value = s['3-2'] || 0;
+                document.getElementById('course-delete-btn').style.display = 'inline-block';
+            } else {
+                // 新增模式
+                document.getElementById('course-modal-title').textContent = '新增課程';
+                document.getElementById('course-name').value = '';
+                document.getElementById('course-domain').value = '國文/社會';
+                document.getElementById('course-1-1').value = 0;
+                document.getElementById('course-1-2').value = 0;
+                document.getElementById('course-2-1').value = 0;
+                document.getElementById('course-2-2').value = 0;
+                document.getElementById('course-3-1').value = 0;
+                document.getElementById('course-3-2').value = 0;
+                document.getElementById('course-delete-btn').style.display = 'none';
+            }
+
+            document.getElementById('course-modal').style.display = 'flex';
+        }
+
+        // 儲存課程
+        async function saveCourse() {
+            // 取得表單資料
+            const name = document.getElementById('course-name').value.trim();
+            if (!name) {
+                alert('請輸入課程名稱');
+                return;
+            }
+
+            const domain = document.getElementById('course-domain').value;
+            const semesters = {
+                '1-1': parseInt(document.getElementById('course-1-1').value) || 0,
+                '1-2': parseInt(document.getElementById('course-1-2').value) || 0,
+                '2-1': parseInt(document.getElementById('course-2-1').value) || 0,
+                '2-2': parseInt(document.getElementById('course-2-2').value) || 0,
+                '3-1': parseInt(document.getElementById('course-3-1').value) || 0,
+                '3-2': parseInt(document.getElementById('course-3-2').value) || 0
+            };
+
+            // 計算總節數
+            let credits = 0;
+            for (const key in semesters) {
+                credits += semesters[key];
+            }
+
+            // 找到目前的科系
+            const departments = getCurrentDepartments();
+            const dept = departments.find(function(d) {
+                return d.id === currentDeptId;
+            });
+            if (!dept) {
+                return;
+            }
+
+            // 建立課程資料
+            const courseData = {
+                name: name,
+                domain: domain,
+                semesters: semesters,
+                credits: credits
+            };
+
+            // 新增或更新
+            if (editingCourseIndex >= 0) {
+                dept.courses[editingCourseIndex] = courseData;
+            } else {
+                if (!dept.courses) {
+                    dept.courses = [];
+                }
+                dept.courses.push(courseData);
+            }
+
+            // 儲存到後端
+            await saveCoursesData();
+
+            // 關閉對話框並更新頁面
+            closeCourseModal();
+            renderCourses();
+            renderDomainStats();
+        }
+
+        // 刪除課程
+        async function deleteCourse() {
+            if (!confirm('確定要刪除這門課程嗎？')) {
+                return;
+            }
+
+            const departments = getCurrentDepartments();
+            const dept = departments.find(function(d) {
+                return d.id === currentDeptId;
+            });
+
+            if (!dept || editingCourseIndex < 0) {
+                return;
+            }
+
+            // 刪除課程
+            dept.courses.splice(editingCourseIndex, 1);
+
+            // 儲存到後端
+            await saveCoursesData();
+
+            // 關閉對話框並更新頁面
+            closeCourseModal();
+            renderCourses();
+            renderDomainStats();
+        }
+
+        // 儲存課程資料到後端
+        async function saveCoursesData() {
+            try {
+                const response = await fetch('/api/courses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(coursesData)
+                });
+                const result = await response.json();
+                if (!result.success) {
+                    alert('儲存失敗：' + result.message);
+                }
+            } catch (error) {
+                alert('網路錯誤');
+            }
+        }
+
+        // 關閉課程對話框
+        function closeCourseModal() {
+            document.getElementById('course-modal').style.display = 'none';
+            editingCourseIndex = -1;
+        }
+
+        // ============================================================
+        // 事件監聽
+        // ============================================================
+
+        function setupEventListeners() {
+            // 日間部/進修部切換
+            const schoolTabs = document.querySelectorAll('.school-tab');
+            schoolTabs.forEach(function(tab) {
+                tab.addEventListener('click', function() {
+                    // 更新按鈕狀態
+                    schoolTabs.forEach(function(t) {
+                        t.classList.remove('active');
+                    });
+                    tab.classList.add('active');
+
+                    // 切換學部
+                    currentSchool = tab.dataset.school;
+                    renderDepartmentTabs();
+                });
+            });
+
+            // 課程對話框按鈕
+            document.getElementById('course-save-btn').addEventListener('click', saveCourse);
+            document.getElementById('course-cancel-btn').addEventListener('click', closeCourseModal);
+            document.getElementById('course-delete-btn').addEventListener('click', deleteCourse);
+
+            // 登入相關
+            const loginBtn = document.getElementById('login-btn');
+            if (loginBtn) {
+                loginBtn.addEventListener('click', function() {
+                    document.getElementById('login-modal').style.display = 'flex';
+                });
+            }
+
+            const loginCancelBtn = document.getElementById('login-cancel-btn');
+            if (loginCancelBtn) {
+                loginCancelBtn.addEventListener('click', function() {
+                    document.getElementById('login-modal').style.display = 'none';
+                });
+            }
+
+            const loginSubmitBtn = document.getElementById('login-submit-btn');
+            if (loginSubmitBtn) {
+                loginSubmitBtn.addEventListener('click', async function() {
+                    const password = document.getElementById('password-input').value;
+                    try {
+                        const response = await fetch('/api/login', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password: password })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                            location.reload();
+                        } else {
+                            document.getElementById('login-error').textContent = result.message;
+                            document.getElementById('login-error').style.display = 'block';
+                        }
+                    } catch (error) {
+                        alert('登入失敗');
+                    }
+                });
+            }
+
+            const logoutBtn = document.getElementById('logout-btn');
+            if (logoutBtn) {
+                logoutBtn.addEventListener('click', async function() {
+                    await fetch('/api/logout', { method: 'POST' });
+                    location.reload();
+                });
+            }
+        }
+    </script>
+</body>
+</html>

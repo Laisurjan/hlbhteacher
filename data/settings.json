@@ -1,0 +1,10 @@
+{
+  "admin_password": "admin123",
+  "school_name": "國立花蓮高級商業職業學校",
+  "current_school_year": 115,
+  "available_years": [113, 114, 115],
+  "presentation_mode": {
+    "font_size": "large",
+    "hide_controls": false
+  }
+}

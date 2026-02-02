@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師員額控管系統 - 年度比較</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- 頁面頂部導覽列 -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>{{ settings.school_name | default('教師員額控管系統') }}</h1>
+        </div>
+        <div class="nav-links">
+            <a href="/">節數總覽</a>
+            <a href="/courses">課程管理</a>
+            {% if is_admin %}
+            <a href="/import">匯入課綱</a>
+            {% endif %}
+            <a href="/compare" class="active">年度比較</a>
+        </div>
+        <div class="nav-auth">
+            {% if is_admin %}
+            <span class="admin-badge">管理員模式</span>
+            <button id="logout-btn" class="btn btn-secondary">登出</button>
+            {% else %}
+            <button id="login-btn" class="btn btn-primary">教務主任登入</button>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- 主要內容區 -->
+    <main class="container">
+        <!-- 標題區塊 -->
+        <section class="page-header">
+            <h2>年度比較</h2>
+            <p>比較不同學年度的課程與節數變化</p>
+        </section>
+
+        <!-- 年度選擇 -->
+        <section class="compare-controls">
+            <div class="year-selector">
+                <label for="year-left">左側學年度</label>
+                <select id="year-left">
+                    {% for year in settings.available_years %}
+                    <option value="{{ year }}" {% if loop.index == 2 %}selected{% endif %}>{{ year }} 學年度</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="compare-arrow">
+                <span>VS</span>
+            </div>
+            <div class="year-selector">
+                <label for="year-right">右側學年度</label>
+                <select id="year-right">
+                    {% for year in settings.available_years %}
+                    <option value="{{ year }}" {% if loop.last %}selected{% endif %}>{{ year }} 學年度</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button id="compare-btn" class="btn btn-primary">開始比較</button>
+        </section>
+
+        <!-- 比較結果 -->
+        <section class="compare-result">
+            <!-- 總覽對比 -->
+            <div class="compare-summary">
+                <div class="compare-column left">
+                    <h3 id="left-year-title">114 學年度</h3>
+                    <div class="compare-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">總基本節數</span>
+                            <span class="stat-value" id="left-total-base">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">總需求節數</span>
+                            <span class="stat-value" id="left-total-required">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">總差額</span>
+                            <span class="stat-value" id="left-total-diff">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="compare-diff-column">
+                    <h3>變化</h3>
+                    <div class="diff-indicator">
+                        <span id="diff-arrow" class="diff-arrow">→</span>
+                        <span id="diff-value" class="diff-value">-</span>
+                    </div>
+                </div>
+
+                <div class="compare-column right">
+                    <h3 id="right-year-title">115 學年度</h3>
+                    <div class="compare-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">總基本節數</span>
+                            <span class="stat-value" id="right-total-base">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">總需求節數</span>
+                            <span class="stat-value" id="right-total-required">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">總差額</span>
+                            <span class="stat-value" id="right-total-diff">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 領域對比表格 -->
+            <div class="compare-table-section">
+                <h3>各領域對比</h3>
+                <table class="compare-table">
+                    <thead>
+                        <tr>
+                            <th>領域</th>
+                            <th colspan="2" class="left-header">
+                                <span id="table-left-year">114</span> 學年度
+                            </th>
+                            <th>差異</th>
+                            <th colspan="2" class="right-header">
+                                <span id="table-right-year">115</span> 學年度
+                            </th>
+                        </tr>
+                        <tr class="sub-header">
+                            <th></th>
+                            <th>基本</th>
+                            <th>需求</th>
+                            <th></th>
+                            <th>基本</th>
+                            <th>需求</th>
+                        </tr>
+                    </thead>
+                    <tbody id="compare-tbody">
+                        <!-- 動態載入 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 變動項目清單 -->
+            <div class="changes-section">
+                <h3>主要變動</h3>
+                <div class="changes-list" id="changes-list">
+                    <p class="no-changes">請先選擇學年度並點擊「開始比較」</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 登入對話框 -->
+    <div class="modal" id="login-modal" style="display: none;">
+        <div class="modal-content">
+            <h3>教務主任登入</h3>
+            <p>請輸入管理密碼以進入編輯模式</p>
+            <input type="password" id="password-input" placeholder="請輸入密碼">
+            <div class="modal-buttons">
+                <button id="login-submit-btn" class="btn btn-primary">登入</button>
+                <button id="login-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+            <p id="login-error" class="error-message" style="display: none;"></p>
+        </div>
+    </div>
+
+    <!-- 頁尾 -->
+    <footer class="footer">
+        <p>教師員額控管系統 &copy; 2024</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // 模擬資料（實際應從 API 取得）
+        const mockData = {
+            114: {
+                total_base: 450,
+                total_required: 480,
+                domains: [
+                    { name: '國文/社會領域', base: 125, required: 130 },
+                    { name: '英語領域', base: 128, required: 138 },
+                    { name: '數學領域', base: 48, required: 52 },
+                    { name: '自然領域', base: 20, required: 18 },
+                    { name: '藝術領域', base: 18, required: 20 },
+                    { name: '體育/健康領域', base: 28, required: 34 },
+                    { name: '專業科目', base: 75, required: 88 }
+                ]
+            },
+            115: {
+                total_base: 462,
+                total_required: 500,
+                domains: [
+                    { name: '國文/社會領域', base: 130, required: 132 },
+                    { name: '英語領域', base: 132, required: 141 },
+                    { name: '數學領域', base: 50, required: 55 },
+                    { name: '自然領域', base: 20, required: 18 },
+                    { name: '藝術領域', base: 20, required: 22 },
+                    { name: '體育/健康領域', base: 30, required: 36 },
+                    { name: '專業科目', base: 80, required: 96 }
+                ]
+            }
+        };
+
+        // 比較按鈕點擊事件
+        document.getElementById('compare-btn').addEventListener('click', function() {
+            const leftYear = document.getElementById('year-left').value;
+            const rightYear = document.getElementById('year-right').value;
+
+            if (leftYear === rightYear) {
+                alert('請選擇不同的學年度進行比較');
+                return;
+            }
+
+            performComparison(leftYear, rightYear);
+        });
+
+        // 執行比較
+        function performComparison(leftYear, rightYear) {
+            // 更新標題
+            document.getElementById('left-year-title').textContent = leftYear + ' 學年度';
+            document.getElementById('right-year-title').textContent = rightYear + ' 學年度';
+            document.getElementById('table-left-year').textContent = leftYear;
+            document.getElementById('table-right-year').textContent = rightYear;
+
+            // 取得資料（實際應從 API 取得）
+            const leftData = mockData[leftYear] || mockData[114];
+            const rightData = mockData[rightYear] || mockData[115];
+
+            // 填入總覽
+            document.getElementById('left-total-base').textContent = leftData.total_base;
+            document.getElementById('left-total-required').textContent = leftData.total_required;
+            document.getElementById('left-total-diff').textContent = leftData.total_required - leftData.total_base;
+
+            document.getElementById('right-total-base').textContent = rightData.total_base;
+            document.getElementById('right-total-required').textContent = rightData.total_required;
+            document.getElementById('right-total-diff').textContent = rightData.total_required - rightData.total_base;
+
+            // 計算變化
+            const requiredDiff = rightData.total_required - leftData.total_required;
+            const diffValue = document.getElementById('diff-value');
+            const diffArrow = document.getElementById('diff-arrow');
+
+            if (requiredDiff > 0) {
+                diffValue.textContent = '+' + requiredDiff;
+                diffValue.className = 'diff-value increase';
+                diffArrow.textContent = '↑';
+                diffArrow.className = 'diff-arrow increase';
+            } else if (requiredDiff < 0) {
+                diffValue.textContent = requiredDiff;
+                diffValue.className = 'diff-value decrease';
+                diffArrow.textContent = '↓';
+                diffArrow.className = 'diff-arrow decrease';
+            } else {
+                diffValue.textContent = '0';
+                diffValue.className = 'diff-value';
+                diffArrow.textContent = '→';
+                diffArrow.className = 'diff-arrow';
+            }
+
+            // 填入表格
+            const tbody = document.getElementById('compare-tbody');
+            tbody.innerHTML = '';
+
+            const changes = [];
+
+            for (let i = 0; i < leftData.domains.length; i++) {
+                const left = leftData.domains[i];
+                const right = rightData.domains[i];
+
+                const baseDiff = right.base - left.base;
+                const reqDiff = right.required - left.required;
+
+                let diffClass = '';
+                let diffText = '';
+                if (reqDiff > 0) {
+                    diffClass = 'increase';
+                    diffText = '+' + reqDiff;
+                    changes.push({ domain: left.name, type: 'increase', value: reqDiff });
+                } else if (reqDiff < 0) {
+                    diffClass = 'decrease';
+                    diffText = reqDiff;
+                    changes.push({ domain: left.name, type: 'decrease', value: reqDiff });
+                } else {
+                    diffText = '0';
+                }
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${left.name}</td>
+                    <td>${left.base}</td>
+                    <td>${left.required}</td>
+                    <td class="${diffClass}">${diffText}</td>
+                    <td>${right.base}</td>
+                    <td>${right.required}</td>
+                `;
+                tbody.appendChild(tr);
+            }
+
+            // 填入變動清單
+            const changesList = document.getElementById('changes-list');
+            if (changes.length > 0) {
+                let html = '';
+                changes.forEach(change => {
+                    const icon = change.type === 'increase' ? '↑' : '↓';
+                    const className = change.type;
+                    html += `
+                        <div class="change-item ${className}">
+                            <span class="change-icon">${icon}</span>
+                            <span class="change-domain">${change.domain}</span>
+                            <span class="change-value">${change.value > 0 ? '+' : ''}${change.value} 節</span>
+                        </div>
+                    `;
+                });
+                changesList.innerHTML = html;
+            } else {
+                changesList.innerHTML = '<p class="no-changes">無變動</p>';
+            }
+        }
+    </script>
+</body>
+</html>

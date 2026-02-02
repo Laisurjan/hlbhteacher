@@ -1,0 +1,714 @@
+{
+  "school_year": 113,
+  "last_updated": "2026-02-02",
+  "overtime_threshold": 16,
+  "base_hours_rules": {
+    "chinese_social": {
+      "專任": 14,
+      "導師": 10,
+      "科主任": 7,
+      "教學組長": 5,
+      "生輔組長": 5,
+      "訓育組長": 5,
+      "註冊組長": 5,
+      "進修部組長": 6,
+      "組長": 7,
+      "主任": 1,
+      "特教業務承辦人": 10
+    },
+    "default": {
+      "專任": 16,
+      "導師": 12,
+      "科主任": 7,
+      "教學組長": 5,
+      "生輔組長": 5,
+      "訓育組長": 5,
+      "註冊組長": 5,
+      "進修部組長": 6,
+      "組長": 7,
+      "主任": 1,
+      "特教業務承辦人": 10
+    }
+  },
+  "new_year_hours": {
+    "chinese_social": {
+      "專任": 14,
+      "導師": 10
+    },
+    "default": {
+      "專任": 16,
+      "導師": 12
+    }
+  },
+  "domains": [
+    {
+      "id": "chinese_social",
+      "name": "國文/社會領域",
+      "total_base_hours": 148,
+      "required_hours": 146,
+      "formal_teachers": [
+        {
+          "base_hours": 1,
+          "is_evening": false,
+          "name": "邱亦縈",
+          "position": "主任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": false,
+          "name": "賴士鈞",
+          "position": "專任"
+        },
+        {
+          "base_hours": 1,
+          "is_evening": false,
+          "name": "呂善成",
+          "position": "主任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": false,
+          "name": "林怡菁",
+          "position": "專任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": false,
+          "name": "凌兆鳳",
+          "position": "專任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": false,
+          "name": "周宜梅",
+          "position": "專任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": false,
+          "name": "甘芝如",
+          "position": "專任"
+        },
+        {
+          "base_hours": 10,
+          "is_evening": false,
+          "name": "林淑萍",
+          "position": "導師"
+        },
+        {
+          "base_hours": 10,
+          "is_evening": false,
+          "name": "洪唯婷",
+          "position": "導師"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": false,
+          "name": "陳維德",
+          "position": "專任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": true,
+          "name": "顏如玉",
+          "position": "專任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": true,
+          "name": "許雅婷",
+          "position": "專任"
+        },
+        {
+          "base_hours": 14,
+          "is_evening": true,
+          "name": "李智淵",
+          "position": "專任"
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "base_hours": 0,
+          "enabled": false,
+          "name": "廖懿琳"
+        }
+      ],
+      "formal_count": 13,
+      "evening_formal_count": 3,
+      "substitute_count": 1,
+      "note": "113學年日校歷史、地理因應課綱挪移暫減14節"
+    },
+    {
+      "id": "english",
+      "name": "英文暨應英科",
+      "total_base_hours": 132,
+      "required_hours": 143,
+      "formal_teachers": [
+        {
+          "name": "林美儒",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "康騰芳",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "張佑丞",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "余沛晴",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "王賢正",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "蘇孟珠",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "陳美惠",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "張敏慧",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "林宥均",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "張萬華",
+          "position": "科主任",
+          "is_evening": false,
+          "base_hours": 6
+        },
+        {
+          "name": "李濟森",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "name": "蔡文杰",
+          "enabled": false,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 10,
+      "evening_formal_count": 1,
+      "substitute_count": 1,
+      "note": "113學年李濟森老師請侍親留停；115學年減4節、116學年減10節、117學年減7節"
+    },
+    {
+      "id": "math",
+      "name": "數學領域",
+      "total_base_hours": 72,
+      "required_hours": 100,
+      "formal_teachers": [
+        {
+          "name": "陳威任",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "吳汶諭",
+          "position": "專任(留停)",
+          "is_evening": false,
+          "base_hours": 0
+        },
+        {
+          "name": "李振巽",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "葉士瑋",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "林俊儒",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "高淩鈴",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 16
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "name": "林秋美",
+          "enabled": false,
+          "base_hours": 0
+        },
+        {
+          "name": "楊昌融",
+          "enabled": false,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 6,
+      "evening_formal_count": 0,
+      "substitute_count": 2,
+      "note": "113學年吳汶諭老師請育嬰留停"
+    },
+    {
+      "id": "science",
+      "name": "自然領域",
+      "total_base_hours": 16,
+      "required_hours": 22,
+      "formal_teachers": [
+        {
+          "name": "楊宜升",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 16
+        }
+      ],
+      "substitute_teachers": [],
+      "formal_count": 1,
+      "evening_formal_count": 0,
+      "substitute_count": 0,
+      "note": ""
+    },
+    {
+      "id": "data_processing",
+      "name": "資處科",
+      "total_base_hours": 116,
+      "required_hours": 138,
+      "formal_teachers": [
+        {
+          "name": "陳麴合",
+          "position": "主任",
+          "is_evening": false,
+          "base_hours": 1
+        },
+        {
+          "name": "黃蘭芝",
+          "position": "組長",
+          "is_evening": false,
+          "base_hours": 5
+        },
+        {
+          "name": "陳妙紅",
+          "position": "科主任",
+          "is_evening": false,
+          "base_hours": 7
+        },
+        {
+          "name": "陳月梅",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "許志恆",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "曹琮閔",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "張正芳",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "江素慧",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "吳振銘",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        },
+        {
+          "name": "官孟璋",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        },
+        {
+          "name": "張美惠",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "name": "楊文鶯",
+          "enabled": true,
+          "base_hours": 0
+        },
+        {
+          "name": "陳美娟",
+          "enabled": true,
+          "base_hours": 0
+        },
+        {
+          "name": "張德彥",
+          "enabled": true,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 8,
+      "evening_formal_count": 3,
+      "substitute_count": 3,
+      "note": "許志恆教師兼授公民；113學年有實用技能班一班(高一)共4節"
+    },
+    {
+      "id": "accounting",
+      "name": "會計科",
+      "total_base_hours": 108,
+      "required_hours": 141,
+      "formal_teachers": [
+        {
+          "name": "江曾為美",
+          "position": "組長",
+          "is_evening": false,
+          "base_hours": 5
+        },
+        {
+          "name": "施美言",
+          "position": "科主任",
+          "is_evening": false,
+          "base_hours": 7
+        },
+        {
+          "name": "林淑滿",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "歐郁玟",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "陳學毅",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "周碧純",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "烏莎斯",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "謝淑姿",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "黃文華",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "name": "林坤宏",
+          "enabled": true,
+          "base_hours": 0
+        },
+        {
+          "name": "黃伃延",
+          "enabled": true,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 8,
+      "evening_formal_count": 1,
+      "substitute_count": 2,
+      "note": "113學年有實用技能班一班(高一)共3節"
+    },
+    {
+      "id": "business",
+      "name": "商經科",
+      "total_base_hours": 120,
+      "required_hours": 146,
+      "formal_teachers": [
+        {
+          "name": "林宣融",
+          "position": "組長",
+          "is_evening": false,
+          "base_hours": 5
+        },
+        {
+          "name": "許雅婷",
+          "position": "科主任",
+          "is_evening": false,
+          "base_hours": 7
+        },
+        {
+          "name": "李翠華",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "魏彙菁",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "沈恩典",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "林淑芬",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "林秀峯",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "洪慧珊",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "粘雅琪",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "張秋菊",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "name": "李思穎",
+          "enabled": true,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 9,
+      "evening_formal_count": 1,
+      "substitute_count": 1,
+      "note": "113學年有實用技能班一班(高一)共5節"
+    },
+    {
+      "id": "multimedia",
+      "name": "多媒體設計科",
+      "total_base_hours": 20,
+      "required_hours": 45,
+      "formal_teachers": [
+        {
+          "name": "蔡雅雯",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "江亭儀",
+          "position": "特教業務",
+          "is_evening": false,
+          "base_hours": 6
+        }
+      ],
+      "substitute_teachers": [],
+      "formal_count": 2,
+      "evening_formal_count": 0,
+      "substitute_count": 0,
+      "note": ""
+    },
+    {
+      "id": "arts",
+      "name": "藝術生活/美術",
+      "total_base_hours": 0,
+      "required_hours": 22,
+      "formal_teachers": [],
+      "substitute_teachers": [
+        {
+          "name": "廖婕雅",
+          "enabled": true,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 0,
+      "evening_formal_count": 0,
+      "substitute_count": 1,
+      "note": ""
+    },
+    {
+      "id": "pe",
+      "name": "體育",
+      "total_base_hours": 48,
+      "required_hours": 61,
+      "formal_teachers": [
+        {
+          "name": "田德洋",
+          "position": "專任",
+          "is_evening": false,
+          "base_hours": 14
+        },
+        {
+          "name": "丁瑋君",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "王曉琪",
+          "position": "導師",
+          "is_evening": false,
+          "base_hours": 10
+        },
+        {
+          "name": "王淑華",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "name": "莊明璋",
+          "enabled": true,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 4,
+      "evening_formal_count": 1,
+      "substitute_count": 1,
+      "note": ""
+    },
+    {
+      "id": "health_career",
+      "name": "健康與護理/生涯規劃",
+      "total_base_hours": 12,
+      "required_hours": 25,
+      "formal_teachers": [
+        {
+          "name": "阮珊珊",
+          "position": "主任",
+          "is_evening": false,
+          "base_hours": 1
+        },
+        {
+          "name": "朱湄惠",
+          "position": "組長",
+          "is_evening": false,
+          "base_hours": 5
+        },
+        {
+          "name": "林明穎",
+          "position": "科主任",
+          "is_evening": false,
+          "base_hours": 7
+        },
+        {
+          "name": "黃佩莉",
+          "position": "專任",
+          "is_evening": true,
+          "base_hours": 14
+        }
+      ],
+      "substitute_teachers": [
+        {
+          "name": "蘇文夙",
+          "enabled": true,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 3,
+      "evening_formal_count": 1,
+      "substitute_count": 1,
+      "note": "113學年日校生涯規劃因課綱調整暫多9節；116學年退休1人"
+    },
+    {
+      "id": "defense",
+      "name": "全民國防教育",
+      "total_base_hours": 0,
+      "required_hours": 11,
+      "formal_teachers": [],
+      "substitute_teachers": [
+        {
+          "name": "代理教師/教官支援",
+          "enabled": true,
+          "base_hours": 0
+        }
+      ],
+      "formal_count": 0,
+      "evening_formal_count": 1,
+      "substitute_count": 1,
+      "note": "軍訓教官支援(尚有3人，113學年退伍1人、114學年退伍1人)"
+    }
+  ],
+  "position_hours": {
+    "主任": 1,
+    "組長": 5,
+    "科主任": 7,
+    "導師": 10,
+    "資源教室業務": 12,
+    "專任": 14,
+    "專任(16)": 16
+  }
+}

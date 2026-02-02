@@ -1,0 +1,37 @@
+# Python 快取
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# 虛擬環境
+venv/
+env/
+.env
+
+# IDE 設定
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 暫存檔案
+temp_*.txt
+temp_*.json
+*.tmp
+nul
+
+# 系統檔案
+.DS_Store
+Thumbs.db
+
+# Claude Code 設定（本地設定）
+.claude/
+
+# 資料預覽檔（可選擇保留或排除）
+data_preview.json
+data/sheet1_preview.csv
+data/sheet2_preview.csv
+
+# PDF 檔案（太大，建議不上傳）
+data/*.pdf
