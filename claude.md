@@ -1,79 +1,78 @@
-# 編碼原則
+# CLAUDE.md
 
-## 核心理念
-請用簡單、清楚、易維護的方式寫程式。
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 必須遵守的原則
+## 專案概述
 
-### 1. KISS - 保持簡單
-- ❌ 不要：使用複雜的語法炫技
-- ✅ 要：用最直觀的方式表達邏輯
-- 範例：優先用 if-else 而不是三元運算子或複雜的 lambda
+教師員額控管網頁系統 - 供國立花蓮高級商業職業學校教務主任維護、全校教師檢視的教師節數管理系統。
 
-### 2. DRY - 不要重複
-- ❌ 不要：複製貼上相同的程式碼
-- ✅ 要：重複邏輯寫成函數
-- 範例：資料處理步驟如果用了 3 次以上，就做成函數
+## 常用指令
 
-### 3. YAGNI - 只做需要的
-- ❌ 不要：預先設計未來「可能」需要的功能
-- ✅ 要：先解決當前問題，需要時再擴充
-- 範例：不要一開始就做「匯出成 10 種格式」的功能
+```bash
+# 啟動開發伺服器
+python app.py
+# 伺服器會在 http://localhost:5000 運行
+# 管理員密碼：admin123
 
-### 4. 單一職責
-- 每個函數只做一件事
-- 函數名稱要清楚說明它的功能
-- 如果函數超過 20 行，考慮拆分
+# 從 Excel 重新產生課程資料
+python utils/excel_parser.py
+```
 
-## 程式碼風格要求
+## 系統架構
 
-### 命名規則
-- 函數名稱：`動詞_名詞` 例如 `calculate_grade()`, `export_report()`
-- 變數名稱：清楚描述內容，例如 `student_scores` 而非 `data`
+### 後端 (Flask)
+- `app.py` - 主程式，包含所有路由和 API
+  - `/` - 首頁（節數總覽）
+  - `/courses` - 課程管理
+  - `/api/*` - REST API 端點
 
-### 註解要求
+### 前端 (純 HTML/CSS/JS)
+- `templates/index.html` - 節數總覽頁面，顯示各領域人力狀況
+- `templates/courses.html` - 課程管理，支援日間部/進修部切換
+
+### 資料儲存 (JSON)
+- `data/courses.json` - 課程資料，結構：`{ day_school: { departments: [...] }, evening_school: { departments: [...] } }`
+- `data/teachers.json` - 教師資料與各領域統計
+- `data/settings.json` - 系統設定
+
+### 工具模組
+- `utils/excel_parser.py` - 從 teacher.xlsx 解析課程資料
+
+## 領域對應關係
+
+teachers.json 的領域 ID 與 courses.json 的領域名稱對應：
+| ID | 名稱 |
+|----|------|
+| `chinese_social` | 國文/社會 |
+| `english` | 英文 |
+| `math` | 數學 |
+| `science` | 自然 |
+| `accounting` | 會計 |
+| `business` | 商經 |
+| `data_processing` | 資處 |
+| `multimedia` | 多媒 |
+| `arts` | 美術 |
+| `pe` | 體育 |
+| `health_career` | 健康/生涯 |
+| `defense` | 國防 |
+
+## 編碼原則
+
+### 核心理念
+用簡單、清楚、易維護的方式寫程式。使用者是程式設計初學者。
+
+### 必須遵守
+1. **KISS** - 優先用 if-else 而不是三元運算子或複雜的 lambda
+2. **DRY** - 重複邏輯（3次以上）寫成函數
+3. **YAGNI** - 只做當前需要的功能
+4. **單一職責** - 每個函數只做一件事，超過 20 行考慮拆分
+
+### 程式碼風格
+- 函數命名：`動詞_名詞`，如 `calculate_grade()`
+- 變數命名：清楚描述內容，如 `student_scores` 而非 `data`
+- **使用中文註解**
 - 每個函數都要有說明用途的註解
-- 複雜邏輯要加上「為什麼這樣做」的註解
-- 使用中文註解（因為我是初學者）
 
-### 錯誤處理
-- 使用 try-except 處理可能出錯的地方
-- 錯誤訊息要清楚告訴我發生什麼問題
-
-## 範例參考
-
-好的函數範例：
-```python
-def calculate_average_score(scores):
-    """計算平均分數
-    
-    Args:
-        scores: 分數列表
-    Returns:
-        平均分數（float）
-    """
-    if not scores:
-        return 0
-    return sum(scores) / len(scores)
-```
-
-不好的函數範例：
-```python
-def process(d):  # 名稱不清楚
-    return sum(d)/len(d) if d else 0  # 太複雜，難讀
-```
-
-## 提醒事項
-- 我是初學者，請優先考慮「易讀易懂」而非「效能最佳化」
-- 有更好的做法時請告訴我，並解釋為什麼
-
-## 我的學習目標
-- 我是文學院畢業，程式設計初學者
-- 我想要「看得懂、能修改」的程式碼
-- 請在關鍵步驟加上詳細註解
-- 如果用到進階語法，請解釋為什麼要這樣做
-
-## 偏好的學習方式
-- 先給我簡單可執行的版本
-- 然後再說明如何改進
-- 不要一開始就給我「完美但複雜」的解決方案
+### JavaScript 注意事項
+- 使用 `function` 宣告而非箭頭函數
+- 避免複雜的鏈式呼叫
