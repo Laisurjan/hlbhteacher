@@ -21,6 +21,14 @@ temp_*.json
 *.tmp
 nul
 
+# Office 開啟時產生的鎖檔
+~$*.xlsx
+~$*.xls
+~$*.docx
+
+# 測試用備份檔
+data/school_data.backup*.json
+
 # 系統檔案
 .DS_Store
 Thumbs.db

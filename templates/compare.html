@@ -5,19 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>教師員額控管系統 - 年度比較</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .compare-table td, .compare-table th { text-align:center; vertical-align: middle; }
+        .compare-table td.domain { text-align:left; font-weight:600; }
+        .compare-table td.increase, .diff-value.increase { color:#c62828; font-weight:600; }
+        .compare-table td.decrease, .diff-value.decrease { color:#2e7d32; font-weight:600; }
+        .muted { color:#888; }
+    </style>
 </head>
 <body>
-    <!-- 頁面頂部導覽列 -->
     <nav class="navbar">
         <div class="nav-brand">
-            <h1>{{ settings.school_name | default('教師員額控管系統') }}</h1>
+            <h1>{{ settings.school_name | default('花蓮高商 — 教師員額控管系統') }}</h1>
         </div>
         <div class="nav-links">
             <a href="/">節數總覽</a>
-            <a href="/courses">課程管理</a>
-            {% if is_admin %}
-            <a href="/import">匯入課綱</a>
-            {% endif %}
+            <a href="/courses">員額編制</a>
+            <a href="/schedule">課程節數</a>
             <a href="/compare" class="active">年度比較</a>
         </div>
         <div class="nav-auth">
@@ -30,21 +34,18 @@
         </div>
     </nav>
 
-    <!-- 主要內容區 -->
     <main class="container">
-        <!-- 標題區塊 -->
         <section class="page-header">
             <h2>年度比較</h2>
-            <p>比較不同學年度的課程與節數變化</p>
+            <p class="muted">選兩個學年度對照各領域的基本節數與需求節數，找出哪些領域變多、變少。</p>
         </section>
 
-        <!-- 年度選擇 -->
         <section class="compare-controls">
             <div class="year-selector">
                 <label for="year-left">左側學年度</label>
                 <select id="year-left">
-                    {% for year in settings.available_years %}
-                    <option value="{{ year }}" {% if loop.index == 2 %}selected{% endif %}>{{ year }} 學年度</option>
+                    {% for year in available_years %}
+                    <option value="{{ year }}" {% if loop.first %}selected{% endif %}>{{ year }} 學年度</option>
                     {% endfor %}
                 </select>
             </div>
@@ -54,7 +55,7 @@
             <div class="year-selector">
                 <label for="year-right">右側學年度</label>
                 <select id="year-right">
-                    {% for year in settings.available_years %}
+                    {% for year in available_years %}
                     <option value="{{ year }}" {% if loop.last %}selected{% endif %}>{{ year }} 學年度</option>
                     {% endfor %}
                 </select>
@@ -62,30 +63,26 @@
             <button id="compare-btn" class="btn btn-primary">開始比較</button>
         </section>
 
-        <!-- 比較結果 -->
+        <section class="compare-controls" style="margin-top:-.5rem;">
+            <span>計算模式：</span>
+            <label><input type="radio" name="cmp-mode" value="strict" checked> 現職務（寬鬆）</label>
+            <label><input type="radio" name="cmp-mode" value="homeroom_all"> 全導師（保守）</label>
+            <label style="margin-left:1rem;"><input type="checkbox" id="cmp-include-sub"> 含代理教師計算</label>
+        </section>
+
         <section class="compare-result">
-            <!-- 總覽對比 -->
             <div class="compare-summary">
                 <div class="compare-column left">
-                    <h3 id="left-year-title">114 學年度</h3>
+                    <h3 id="left-year-title">-</h3>
                     <div class="compare-stats">
-                        <div class="stat-item">
-                            <span class="stat-label">總基本節數</span>
-                            <span class="stat-value" id="left-total-base">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">總需求節數</span>
-                            <span class="stat-value" id="left-total-required">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">總差額</span>
-                            <span class="stat-value" id="left-total-diff">-</span>
-                        </div>
+                        <div class="stat-item"><span class="stat-label">基本節數(職務法)</span><span class="stat-value" id="left-total-base">-</span></div>
+                        <div class="stat-item"><span class="stat-label">需求節數</span><span class="stat-value" id="left-total-required">-</span></div>
+                        <div class="stat-item"><span class="stat-label">差額</span><span class="stat-value" id="left-total-diff">-</span></div>
                     </div>
                 </div>
 
                 <div class="compare-diff-column">
-                    <h3>變化</h3>
+                    <h3>需求變化</h3>
                     <div class="diff-indicator">
                         <span id="diff-arrow" class="diff-arrow">→</span>
                         <span id="diff-value" class="diff-value">-</span>
@@ -93,59 +90,44 @@
                 </div>
 
                 <div class="compare-column right">
-                    <h3 id="right-year-title">115 學年度</h3>
+                    <h3 id="right-year-title">-</h3>
                     <div class="compare-stats">
-                        <div class="stat-item">
-                            <span class="stat-label">總基本節數</span>
-                            <span class="stat-value" id="right-total-base">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">總需求節數</span>
-                            <span class="stat-value" id="right-total-required">-</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">總差額</span>
-                            <span class="stat-value" id="right-total-diff">-</span>
-                        </div>
+                        <div class="stat-item"><span class="stat-label">基本節數(職務法)</span><span class="stat-value" id="right-total-base">-</span></div>
+                        <div class="stat-item"><span class="stat-label">需求節數</span><span class="stat-value" id="right-total-required">-</span></div>
+                        <div class="stat-item"><span class="stat-label">差額</span><span class="stat-value" id="right-total-diff">-</span></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 領域對比表格 -->
             <div class="compare-table-section">
-                <h3>各領域對比</h3>
+                <h3>各領域對比（職務法）</h3>
                 <table class="compare-table">
                     <thead>
                         <tr>
-                            <th>領域</th>
-                            <th colspan="2" class="left-header">
-                                <span id="table-left-year">114</span> 學年度
-                            </th>
-                            <th>差異</th>
-                            <th colspan="2" class="right-header">
-                                <span id="table-right-year">115</span> 學年度
-                            </th>
+                            <th rowspan="2">領域/科別</th>
+                            <th colspan="4" class="left-header"><span id="table-left-year">-</span> 學年度</th>
+                            <th rowspan="2">需求差<br>(合計)</th>
+                            <th colspan="4" class="right-header"><span id="table-right-year">-</span> 學年度</th>
                         </tr>
                         <tr class="sub-header">
-                            <th></th>
                             <th>基本</th>
-                            <th>需求</th>
-                            <th></th>
+                            <th>日</th>
+                            <th>進</th>
+                            <th>合計</th>
                             <th>基本</th>
-                            <th>需求</th>
+                            <th>日</th>
+                            <th>進</th>
+                            <th>合計</th>
                         </tr>
                     </thead>
-                    <tbody id="compare-tbody">
-                        <!-- 動態載入 -->
-                    </tbody>
+                    <tbody id="compare-tbody"></tbody>
                 </table>
             </div>
 
-            <!-- 變動項目清單 -->
             <div class="changes-section">
                 <h3>主要變動</h3>
                 <div class="changes-list" id="changes-list">
-                    <p class="no-changes">請先選擇學年度並點擊「開始比較」</p>
+                    <p class="no-changes">請選擇學年度後按「開始比較」。</p>
                 </div>
             </div>
         </section>
@@ -165,45 +147,37 @@
         </div>
     </div>
 
-    <!-- 頁尾 -->
     <footer class="footer">
         <p>教師員額控管系統 &copy; 2024</p>
     </footer>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-        // 模擬資料（實際應從 API 取得）
-        const mockData = {
-            114: {
-                total_base: 450,
-                total_required: 480,
-                domains: [
-                    { name: '國文/社會領域', base: 125, required: 130 },
-                    { name: '英語領域', base: 128, required: 138 },
-                    { name: '數學領域', base: 48, required: 52 },
-                    { name: '自然領域', base: 20, required: 18 },
-                    { name: '藝術領域', base: 18, required: 20 },
-                    { name: '體育/健康領域', base: 28, required: 34 },
-                    { name: '專業科目', base: 75, required: 88 }
-                ]
-            },
-            115: {
-                total_base: 462,
-                total_required: 500,
-                domains: [
-                    { name: '國文/社會領域', base: 130, required: 132 },
-                    { name: '英語領域', base: 132, required: 141 },
-                    { name: '數學領域', base: 50, required: 55 },
-                    { name: '自然領域', base: 20, required: 18 },
-                    { name: '藝術領域', base: 20, required: 22 },
-                    { name: '體育/健康領域', base: 30, required: 36 },
-                    { name: '專業科目', base: 80, required: 96 }
-                ]
-            }
-        };
+    (function () {
+        function currentMode() {
+            const r = document.querySelector('input[name="cmp-mode"]:checked');
+            return r ? r.value : 'strict';
+        }
+        const subToggle = document.getElementById('cmp-include-sub');
 
-        // 比較按鈕點擊事件
-        document.getElementById('compare-btn').addEventListener('click', function() {
+        async function fetchSummary(year) {
+            const params = new URLSearchParams({ year: String(year), mode: currentMode() });
+            if (subToggle.checked) params.set('include_sub', '1');
+            const res = await fetch('/api/summary?' + params.toString());
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || `HTTP ${res.status}`);
+            }
+            return res.json();
+        }
+
+        function diffTag(delta) {
+            if (delta > 0) return { cls: 'increase', text: '+' + delta, arrow: '↑' };
+            if (delta < 0) return { cls: 'decrease', text: String(delta), arrow: '↓' };
+            return { cls: '', text: '0', arrow: '→' };
+        }
+
+        async function performComparison() {
             const leftYear = document.getElementById('year-left').value;
             const rightYear = document.getElementById('year-right').value;
 
@@ -212,111 +186,99 @@
                 return;
             }
 
-            performComparison(leftYear, rightYear);
-        });
+            let L, R;
+            try {
+                [L, R] = await Promise.all([fetchSummary(leftYear), fetchSummary(rightYear)]);
+            } catch (e) {
+                alert('載入失敗：' + e.message);
+                return;
+            }
 
-        // 執行比較
-        function performComparison(leftYear, rightYear) {
-            // 更新標題
-            document.getElementById('left-year-title').textContent = leftYear + ' 學年度';
-            document.getElementById('right-year-title').textContent = rightYear + ' 學年度';
-            document.getElementById('table-left-year').textContent = leftYear;
+            document.getElementById('left-year-title').textContent  = `${leftYear} 學年度`;
+            document.getElementById('right-year-title').textContent = `${rightYear} 學年度`;
+            document.getElementById('table-left-year').textContent  = leftYear;
             document.getElementById('table-right-year').textContent = rightYear;
 
-            // 取得資料（實際應從 API 取得）
-            const leftData = mockData[leftYear] || mockData[114];
-            const rightData = mockData[rightYear] || mockData[115];
+            const leftReq  = L.totals.required_total ?? L.totals.required_hours;
+            const rightReq = R.totals.required_total ?? R.totals.required_hours;
 
-            // 填入總覽
-            document.getElementById('left-total-base').textContent = leftData.total_base;
-            document.getElementById('left-total-required').textContent = leftData.total_required;
-            document.getElementById('left-total-diff').textContent = leftData.total_required - leftData.total_base;
+            document.getElementById('left-total-base').textContent      = L.totals.base_position;
+            document.getElementById('left-total-required').textContent  = `${leftReq} (日 ${L.totals.required_day ?? '-'} / 進 ${L.totals.required_evening ?? '-'})`;
+            document.getElementById('left-total-diff').textContent      = L.totals.diff_position;
 
-            document.getElementById('right-total-base').textContent = rightData.total_base;
-            document.getElementById('right-total-required').textContent = rightData.total_required;
-            document.getElementById('right-total-diff').textContent = rightData.total_required - rightData.total_base;
+            document.getElementById('right-total-base').textContent     = R.totals.base_position;
+            document.getElementById('right-total-required').textContent = `${rightReq} (日 ${R.totals.required_day ?? '-'} / 進 ${R.totals.required_evening ?? '-'})`;
+            document.getElementById('right-total-diff').textContent     = R.totals.diff_position;
 
-            // 計算變化
-            const requiredDiff = rightData.total_required - leftData.total_required;
+            const totalDelta = rightReq - leftReq;
+            const td = diffTag(totalDelta);
             const diffValue = document.getElementById('diff-value');
             const diffArrow = document.getElementById('diff-arrow');
+            diffValue.textContent = td.text; diffValue.className = 'diff-value ' + td.cls;
+            diffArrow.textContent = td.arrow; diffArrow.className = 'diff-arrow ' + td.cls;
 
-            if (requiredDiff > 0) {
-                diffValue.textContent = '+' + requiredDiff;
-                diffValue.className = 'diff-value increase';
-                diffArrow.textContent = '↑';
-                diffArrow.className = 'diff-arrow increase';
-            } else if (requiredDiff < 0) {
-                diffValue.textContent = requiredDiff;
-                diffValue.className = 'diff-value decrease';
-                diffArrow.textContent = '↓';
-                diffArrow.className = 'diff-arrow decrease';
-            } else {
-                diffValue.textContent = '0';
-                diffValue.className = 'diff-value';
-                diffArrow.textContent = '→';
-                diffArrow.className = 'diff-arrow';
-            }
+            const rightByDomain = {};
+            R.rows.forEach(r => { rightByDomain[r.domain_id] = r; });
 
-            // 填入表格
             const tbody = document.getElementById('compare-tbody');
             tbody.innerHTML = '';
-
             const changes = [];
 
-            for (let i = 0; i < leftData.domains.length; i++) {
-                const left = leftData.domains[i];
-                const right = rightData.domains[i];
-
-                const baseDiff = right.base - left.base;
-                const reqDiff = right.required - left.required;
-
-                let diffClass = '';
-                let diffText = '';
-                if (reqDiff > 0) {
-                    diffClass = 'increase';
-                    diffText = '+' + reqDiff;
-                    changes.push({ domain: left.name, type: 'increase', value: reqDiff });
-                } else if (reqDiff < 0) {
-                    diffClass = 'decrease';
-                    diffText = reqDiff;
-                    changes.push({ domain: left.name, type: 'decrease', value: reqDiff });
-                } else {
-                    diffText = '0';
-                }
-
+            L.rows.forEach(left => {
+                const right = rightByDomain[left.domain_id];
+                if (!right) return;
+                const leftTotal  = left.required_total  ?? left.required_hours  ?? 0;
+                const rightTotal = right.required_total ?? right.required_hours ?? 0;
+                const delta = rightTotal - leftTotal;
+                const tag = diffTag(delta);
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${left.name}</td>
-                    <td>${left.base}</td>
-                    <td>${left.required}</td>
-                    <td class="${diffClass}">${diffText}</td>
-                    <td>${right.base}</td>
-                    <td>${right.required}</td>
+                    <td class="domain">${left.domain_name}</td>
+                    <td>${left.base_position ?? '-'}</td>
+                    <td>${left.required_day ?? '-'}</td>
+                    <td>${left.required_evening ?? '-'}</td>
+                    <td><strong>${leftTotal}</strong></td>
+                    <td class="${tag.cls}">${tag.text}</td>
+                    <td>${right.base_position ?? '-'}</td>
+                    <td>${right.required_day ?? '-'}</td>
+                    <td>${right.required_evening ?? '-'}</td>
+                    <td><strong>${rightTotal}</strong></td>
                 `;
                 tbody.appendChild(tr);
-            }
 
-            // 填入變動清單
+                if (delta !== 0) {
+                    changes.push({ domain: left.domain_name, delta, tag });
+                }
+            });
+
             const changesList = document.getElementById('changes-list');
-            if (changes.length > 0) {
+            if (changes.length === 0) {
+                changesList.innerHTML = '<p class="no-changes">無變動</p>';
+            } else {
+                changes.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
                 let html = '';
-                changes.forEach(change => {
-                    const icon = change.type === 'increase' ? '↑' : '↓';
-                    const className = change.type;
-                    html += `
-                        <div class="change-item ${className}">
-                            <span class="change-icon">${icon}</span>
-                            <span class="change-domain">${change.domain}</span>
-                            <span class="change-value">${change.value > 0 ? '+' : ''}${change.value} 節</span>
-                        </div>
-                    `;
+                changes.forEach(c => {
+                    html += `<div class="change-item ${c.tag.cls}"><span class="change-icon">${c.tag.arrow}</span><span class="change-domain">${c.domain}</span><span class="change-value">${c.tag.text} 節</span></div>`;
                 });
                 changesList.innerHTML = html;
-            } else {
-                changesList.innerHTML = '<p class="no-changes">無變動</p>';
             }
         }
+
+        document.getElementById('compare-btn').addEventListener('click', performComparison);
+        subToggle.addEventListener('change', performComparison);
+        document.querySelectorAll('input[name="cmp-mode"]').forEach(r => {
+            r.addEventListener('change', performComparison);
+        });
+
+        // 預設載入一次
+        document.addEventListener('DOMContentLoaded', () => {
+            const yl = document.getElementById('year-left');
+            const yr = document.getElementById('year-right');
+            if (yl && yr && yl.value && yr.value && yl.value !== yr.value) {
+                performComparison();
+            }
+        });
+    })();
     </script>
 </body>
 </html>

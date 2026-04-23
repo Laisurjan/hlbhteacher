@@ -3,17 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>教師員額控管系統 - 課程管理</title>
+    <title>教師員額控管系統 - 員額編制</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .toolbar { display:flex; gap:1rem; align-items:center; margin: 1rem 0; flex-wrap:wrap; }
+        .toolbar label { font-weight:600; }
+        .toolbar select { padding:.4rem .6rem; font-size:1rem; }
+        .quota-table { width:100%; border-collapse: collapse; margin-top: 1rem; }
+        .quota-table th, .quota-table td { border:1px solid #ddd; padding:.35rem .4rem; text-align:center; vertical-align: middle; font-size:.85rem; }
+        .quota-table thead th { background:#f4f4f4; }
+        .quota-table td.domain-name { text-align:left; font-weight:600; white-space:nowrap; }
+        .quota-table td.remark-col { text-align:left; max-width: 320px; }
+        .quota-table td.remark-col .remark-line { font-size:.75rem; color:#555; margin:1px 0; }
+        .quota-table input[type="number"] { width: 3.2rem; text-align:center; font-size:.85rem; padding: .15rem; }
+        .quota-table tr.saved td { background: #e8f5e9; transition: background .6s; }
+        .muted { color:#888; }
+        .btn-small { font-size:.75rem; padding:.2rem .6rem; }
+        .save-row-btn { white-space:nowrap; }
+        .remark-modal textarea { width:100%; min-height:60px; font-family:inherit; font-size:.9rem; }
+        .remark-modal .form-group { margin-bottom:.6rem; }
+        .remark-modal .form-group label { display:block; font-weight:600; margin-bottom:.2rem; }
+        .remark-modal .modal-content { max-width: 560px; width: 90%; }
+    </style>
 </head>
 <body>
     <nav class="navbar">
         <div class="nav-brand">
-            <h1>{{ settings.school_name | default('教師員額控管系統') }}</h1>
+            <h1>{{ settings.school_name | default('花蓮高商 — 教師員額控管系統') }}</h1>
         </div>
         <div class="nav-links">
             <a href="/">節數總覽</a>
-            <a href="/courses" class="active">課程管理</a>
+            <a href="/courses" class="active">員額編制</a>
+            <a href="/schedule">課程節數</a>
             <a href="/compare">年度比較</a>
         </div>
         <div class="nav-auth">
@@ -28,36 +49,25 @@
 
     <main class="container">
         <section class="page-header">
-            <h2>{{ courses.school_year | default(113) }} 學年度 - 課程管理</h2>
-            <p class="last-updated">最後更新：{{ courses.last_updated | default('尚未更新') }}</p>
-        </section>
+            <h2 id="page-title">員額編制 — 依學年度編輯</h2>
+            <p class="muted">
+                每個領域這學年有幾位主任、組長、導師、專任以及代理老師。
+                {% if is_admin %}改完某一列後按「儲存」，首頁的節數差會跟著重算。{% else %}需教務主任登入後才能編輯。{% endif %}
+            </p>
 
-        <!-- 日間部/進修部 切換 -->
-        <section class="tabs-section">
-            <div class="tabs school-tabs" id="school-tabs">
-                <button class="tab-btn school-tab active" data-school="day">日間部</button>
-                <button class="tab-btn school-tab" data-school="evening">進修部</button>
+            <div class="toolbar">
+                <label for="year-select">學年度：</label>
+                <select id="year-select"></select>
             </div>
         </section>
 
-        <!-- 科系分頁標籤 -->
-        <section class="tabs-section sub-tabs">
-            <div class="tabs" id="department-tabs">
-                <!-- 動態生成 -->
-            </div>
-        </section>
-
-        <!-- 課程內容區 -->
-        <section class="courses-section" id="courses-content">
-            <!-- 動態生成 -->
-        </section>
-
-        <!-- 各領域節數統計 -->
-        <section class="stats-section">
-            <h3>各領域總需求節數（日間部 + 進修部）</h3>
-            <div class="stats-grid" id="domain-stats">
-                <!-- 動態生成 -->
-            </div>
+        <section>
+            <table class="quota-table" id="quota-table">
+                <thead>
+                    <tr id="quota-head"></tr>
+                </thead>
+                <tbody id="quota-tbody"></tbody>
+            </table>
         </section>
     </main>
 
@@ -75,65 +85,35 @@
         </div>
     </div>
 
-    <!-- 新增/編輯課程對話框 -->
-    <div class="modal" id="course-modal" style="display: none;">
+    <!-- 備註編輯對話框 -->
+    <div class="modal remark-modal" id="remark-modal" style="display: none;">
         <div class="modal-content">
-            <h3 id="course-modal-title">新增課程</h3>
-            <form id="course-form">
-                <div class="form-group">
-                    <label>課程名稱</label>
-                    <input type="text" id="course-name" required placeholder="請輸入課程名稱">
-                </div>
-                <div class="form-group">
-                    <label>教學領域</label>
-                    <select id="course-domain">
-                        <option value="國文/社會">國文/社會</option>
-                        <option value="英文">英文</option>
-                        <option value="數學">數學</option>
-                        <option value="自然">自然</option>
-                        <option value="會計">會計</option>
-                        <option value="商經">商經</option>
-                        <option value="資處">資處</option>
-                        <option value="多媒">多媒</option>
-                        <option value="美術">美術</option>
-                        <option value="體育">體育</option>
-                        <option value="健康/生涯">健康/生涯</option>
-                        <option value="國防">國防</option>
-                        <option value="其他">其他</option>
-                    </select>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>一上</label>
-                        <input type="number" id="course-1-1" min="0" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label>一下</label>
-                        <input type="number" id="course-1-2" min="0" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label>二上</label>
-                        <input type="number" id="course-2-1" min="0" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label>二下</label>
-                        <input type="number" id="course-2-2" min="0" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label>三上</label>
-                        <input type="number" id="course-3-1" min="0" value="0">
-                    </div>
-                    <div class="form-group">
-                        <label>三下</label>
-                        <input type="number" id="course-3-2" min="0" value="0">
-                    </div>
-                </div>
-            </form>
-            <div class="modal-buttons">
-                <button id="course-save-btn" class="btn btn-primary">儲存</button>
-                <button id="course-cancel-btn" class="btn btn-secondary">取消</button>
-                <button id="course-delete-btn" class="btn btn-danger" style="display: none;">刪除</button>
+            <h3 id="remark-modal-title">編輯備註</h3>
+            <div class="form-group">
+                <label for="remark-name-list">名單</label>
+                <textarea id="remark-name-list"></textarea>
             </div>
+            <div class="form-group">
+                <label for="remark-substitute-note">代理備註</label>
+                <textarea id="remark-substitute-note"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="remark-remark-person">人員備註</label>
+                <textarea id="remark-remark-person"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="remark-remark-event">事件備註</label>
+                <textarea id="remark-remark-event"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="remark-future-note">未來備註</label>
+                <textarea id="remark-future-note"></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button id="remark-save-btn" class="btn btn-primary">儲存</button>
+                <button id="remark-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+            <p id="remark-error" class="error-message" style="display: none;"></p>
         </div>
     </div>
 
@@ -143,491 +123,237 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
-        // ============================================================
-        // 全域變數
-        // ============================================================
-        let coursesData = null;        // 課程資料
-        let currentSchool = 'day';     // 目前選擇的學部（day 或 evening）
-        let currentDeptId = null;      // 目前選擇的科系
-        let editingCourseIndex = -1;   // 編輯中的課程索引（-1 表示新增）
-        const isAdmin = {{ 'true' if is_admin else 'false' }};
+    (function () {
+        const IS_ADMIN = {{ 'true' if is_admin else 'false' }};
+        const yearSelect = document.getElementById('year-select');
+        const head       = document.getElementById('quota-head');
+        const tbody      = document.getElementById('quota-tbody');
+        const titleEl    = document.getElementById('page-title');
 
-        // ============================================================
-        // 頁面載入
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', async function() {
-            // 載入課程資料
-            await loadCoursesData();
+        const REMARK_FIELDS = [
+            { key: 'name_list',       label: '名單' },
+            { key: 'substitute_note', label: '代理' },
+            { key: 'remark_person',   label: '人員' },
+            { key: 'remark_event',    label: '事件' },
+            { key: 'future_note',     label: '未來' },
+        ];
 
-            // 渲染頁面
-            renderDepartmentTabs();
-            renderDomainStats();
+        let currentData = null;
+        let positionColumns = [];
+        let editingDomainId = null;
 
-            // 設定事件監聽
-            setupEventListeners();
-        });
-
-        // ============================================================
-        // 資料載入
-        // ============================================================
-
-        // 載入課程資料
-        async function loadCoursesData() {
-            const response = await fetch('/api/courses');
-            coursesData = await response.json();
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
 
-        // 取得目前學部的科系列表
-        function getCurrentDepartments() {
-            if (currentSchool === 'day') {
-                return coursesData.day_school?.departments || [];
-            } else {
-                return coursesData.evening_school?.departments || [];
+        async function fetchSummary(year) {
+            const url = year ? `/api/summary?year=${encodeURIComponent(year)}` : '/api/summary';
+            const res = await fetch(url);
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert('載入失敗：' + (err.error || res.status));
+                return null;
             }
+            return res.json();
         }
 
-        // ============================================================
-        // 頁面渲染
-        // ============================================================
-
-        // 渲染科系分頁
-        function renderDepartmentTabs() {
-            const departments = getCurrentDepartments();
-            const tabsContainer = document.getElementById('department-tabs');
-            tabsContainer.innerHTML = '';
-
-            // 如果沒有科系資料
-            if (departments.length === 0) {
-                tabsContainer.innerHTML = '<p>尚無科系資料</p>';
-                document.getElementById('courses-content').innerHTML = '';
-                return;
-            }
-
-            // 建立科系分頁按鈕
-            departments.forEach((dept, index) => {
-                const btn = document.createElement('button');
-                btn.className = 'tab-btn sub-tab';
-                if (index === 0) {
-                    btn.classList.add('active');
-                }
-                btn.dataset.deptId = dept.id;
-                btn.textContent = dept.name;
-                btn.addEventListener('click', function() {
-                    selectDept(dept.id);
-                });
-                tabsContainer.appendChild(btn);
+        function renderHead() {
+            let html = '<th>領域/科別</th>';
+            positionColumns.forEach(spec => {
+                html += `<th title="${escapeHtml(spec.col)} ${escapeHtml(spec.label)}（${spec.rate}節）">${escapeHtml(spec.label)}</th>`;
             });
-
-            // 選擇第一個科系
-            if (departments.length > 0) {
-                selectDept(departments[0].id);
-            }
+            html += '<th>代理<br>(AK)</th>';
+            html += '<th>備註摘要</th>';
+            if (IS_ADMIN) html += '<th>操作</th>';
+            head.innerHTML = html;
         }
 
-        // 選擇科系
-        function selectDept(deptId) {
-            currentDeptId = deptId;
+        function renderRemarkSummary(remark) {
+            let html = '';
+            REMARK_FIELDS.forEach(({ key, label }) => {
+                const value = remark && remark[key];
+                if (value && String(value).trim()) {
+                    html += `<div class="remark-line"><strong>${label}：</strong>${escapeHtml(value)}</div>`;
+                }
+            });
+            if (!html) html = '<div class="remark-line muted">（無備註）</div>';
+            if (IS_ADMIN) {
+                html += `<button type="button" class="btn btn-small btn-outline remark-edit-btn">編輯備註</button>`;
+            }
+            return html;
+        }
 
-            // 更新分頁按鈕狀態
-            const tabs = document.querySelectorAll('#department-tabs .tab-btn');
-            tabs.forEach(function(btn) {
-                if (btn.dataset.deptId === deptId) {
-                    btn.classList.add('active');
+        function renderRow(row) {
+            const tr = document.createElement('tr');
+            tr.dataset.domainId = row.domain_id;
+
+            const positions = (row.positions_by_year && row.positions_by_year[currentData.year]) || {};
+
+            let html = `<td class="domain-name" title="${escapeHtml(row.domain_id)}">${escapeHtml(row.domain_name)}</td>`;
+            positionColumns.forEach(spec => {
+                const value = positions[spec.key] ?? 0;
+                if (IS_ADMIN) {
+                    html += `<td><input type="number" min="0" data-key="${escapeHtml(spec.key)}" value="${value}"></td>`;
                 } else {
-                    btn.classList.remove('active');
+                    html += `<td>${value}</td>`;
                 }
             });
-
-            // 渲染課程
-            renderCourses();
-        }
-
-        // 渲染課程列表
-        function renderCourses() {
-            const departments = getCurrentDepartments();
-            const dept = departments.find(function(d) {
-                return d.id === currentDeptId;
-            });
-
-            if (!dept) {
-                return;
-            }
-
-            const container = document.getElementById('courses-content');
-            let html = '';
-
-            // 標題區
-            html += '<div class="dept-content active">';
-            html += '<div class="dept-header">';
-            html += '<h3>' + dept.name + '</h3>';
-            if (isAdmin) {
-                html += '<button class="btn btn-primary add-course-btn">+ 新增課程</button>';
-            }
-            html += '</div>';
-
-            // 課程列表
-            if (dept.courses && dept.courses.length > 0) {
-                // 依領域分組
-                const coursesByDomain = {};
-                dept.courses.forEach(function(course, index) {
-                    const domain = course.domain || '其他';
-                    if (!coursesByDomain[domain]) {
-                        coursesByDomain[domain] = [];
-                    }
-                    // 複製課程並加上索引
-                    const courseWithIndex = Object.assign({}, course);
-                    courseWithIndex._index = index;
-                    coursesByDomain[domain].push(courseWithIndex);
-                });
-
-                // 渲染每個領域
-                for (const domain in coursesByDomain) {
-                    const courses = coursesByDomain[domain];
-                    html += '<h4 class="domain-header">' + domain + '</h4>';
-                    html += '<table class="courses-table">';
-                    html += '<thead><tr>';
-                    html += '<th>課程名稱</th>';
-                    html += '<th>一上</th><th>一下</th>';
-                    html += '<th>二上</th><th>二下</th>';
-                    html += '<th>三上</th><th>三下</th>';
-                    html += '<th>總節數</th>';
-                    if (isAdmin) {
-                        html += '<th>操作</th>';
-                    }
-                    html += '</tr></thead><tbody>';
-
-                    courses.forEach(function(course) {
-                        const s = course.semesters || {};
-                        html += '<tr data-index="' + course._index + '">';
-                        html += '<td>' + course.name + '</td>';
-                        html += '<td>' + (s['1-1'] || '-') + '</td>';
-                        html += '<td>' + (s['1-2'] || '-') + '</td>';
-                        html += '<td>' + (s['2-1'] || '-') + '</td>';
-                        html += '<td>' + (s['2-2'] || '-') + '</td>';
-                        html += '<td>' + (s['3-1'] || '-') + '</td>';
-                        html += '<td>' + (s['3-2'] || '-') + '</td>';
-                        html += '<td><strong>' + (course.credits || 0) + '</strong></td>';
-                        if (isAdmin) {
-                            html += '<td><button class="btn btn-small btn-outline edit-course-btn" data-index="' + course._index + '">編輯</button></td>';
-                        }
-                        html += '</tr>';
-                    });
-
-                    html += '</tbody></table>';
-                }
-
-                // 總節數
-                let totalCredits = 0;
-                dept.courses.forEach(function(c) {
-                    totalCredits += c.credits || 0;
-                });
-                html += '<p class="total-credits">總節數：<strong>' + totalCredits + '</strong></p>';
-
+            if (IS_ADMIN) {
+                html += `<td><input type="number" min="0" data-key="substitute_count" value="${row.AK_substitute ?? 0}"></td>`;
             } else {
-                html += '<div class="empty-state"><p>尚無課程資料</p></div>';
+                html += `<td>${row.AK_substitute ?? 0}</td>`;
             }
-
-            html += '</div>';
-            container.innerHTML = html;
-
-            // 綁定按鈕事件
-            if (isAdmin) {
-                const addBtn = container.querySelector('.add-course-btn');
-                if (addBtn) {
-                    addBtn.addEventListener('click', function() {
-                        openCourseModal(-1);
-                    });
-                }
-
-                const editBtns = container.querySelectorAll('.edit-course-btn');
-                editBtns.forEach(function(btn) {
-                    btn.addEventListener('click', function() {
-                        const index = parseInt(btn.dataset.index);
-                        openCourseModal(index);
-                    });
-                });
+            html += `<td class="remark-col">${renderRemarkSummary(row.remark)}</td>`;
+            if (IS_ADMIN) {
+                html += `<td><button type="button" class="btn btn-primary btn-small save-row-btn">儲存</button></td>`;
             }
+            tr.innerHTML = html;
+
+            if (IS_ADMIN) {
+                const saveBtn = tr.querySelector('.save-row-btn');
+                saveBtn.addEventListener('click', () => saveRow(tr, row.domain_id));
+                const remarkBtn = tr.querySelector('.remark-edit-btn');
+                if (remarkBtn) remarkBtn.addEventListener('click', () => openRemarkModal(row));
+            }
+            return tr;
         }
 
-        // 渲染領域統計（日間部 + 進修部）
-        function renderDomainStats() {
-            const statsContainer = document.getElementById('domain-stats');
-            const domainTotals = {};
-
-            // 統計日間部
-            if (coursesData.day_school && coursesData.day_school.departments) {
-                coursesData.day_school.departments.forEach(function(dept) {
-                    if (dept.courses) {
-                        dept.courses.forEach(function(course) {
-                            const domain = course.domain || '其他';
-                            if (!domainTotals[domain]) {
-                                domainTotals[domain] = 0;
-                            }
-                            domainTotals[domain] += course.credits || 0;
-                        });
-                    }
-                });
-            }
-
-            // 統計進修部
-            if (coursesData.evening_school && coursesData.evening_school.departments) {
-                coursesData.evening_school.departments.forEach(function(dept) {
-                    if (dept.courses) {
-                        dept.courses.forEach(function(course) {
-                            const domain = course.domain || '其他';
-                            if (!domainTotals[domain]) {
-                                domainTotals[domain] = 0;
-                            }
-                            domainTotals[domain] += course.credits || 0;
-                        });
-                    }
-                });
-            }
-
-            // 渲染統計卡片
-            let html = '';
-            const sortedDomains = Object.keys(domainTotals).sort(function(a, b) {
-                return domainTotals[b] - domainTotals[a];
+        async function saveRow(tr, domainId) {
+            const positions = {};
+            tr.querySelectorAll('input[type="number"]').forEach(input => {
+                const key = input.dataset.key;
+                if (key === 'substitute_count') return;
+                positions[key] = parseInt(input.value, 10) || 0;
             });
+            const subInput = tr.querySelector('input[data-key="substitute_count"]');
+            const substitute_count = parseInt(subInput ? subInput.value : 0, 10) || 0;
 
-            sortedDomains.forEach(function(domain) {
-                if (domain) {
-                    html += '<div class="stat-card">';
-                    html += '<h4>' + domain + '</h4>';
-                    html += '<div class="stat-diff">' + domainTotals[domain] + ' 節</div>';
-                    html += '</div>';
-                }
-            });
-
-            statsContainer.innerHTML = html || '<p>尚無統計資料</p>';
-        }
-
-        // ============================================================
-        // 課程編輯
-        // ============================================================
-
-        // 開啟課程對話框
-        function openCourseModal(index) {
-            editingCourseIndex = index;
-            const departments = getCurrentDepartments();
-            const dept = departments.find(function(d) {
-                return d.id === currentDeptId;
-            });
-
-            if (index >= 0 && dept && dept.courses[index]) {
-                // 編輯模式
-                const course = dept.courses[index];
-                const s = course.semesters || {};
-                document.getElementById('course-modal-title').textContent = '編輯課程';
-                document.getElementById('course-name').value = course.name;
-                document.getElementById('course-domain').value = course.domain || '其他';
-                document.getElementById('course-1-1').value = s['1-1'] || 0;
-                document.getElementById('course-1-2').value = s['1-2'] || 0;
-                document.getElementById('course-2-1').value = s['2-1'] || 0;
-                document.getElementById('course-2-2').value = s['2-2'] || 0;
-                document.getElementById('course-3-1').value = s['3-1'] || 0;
-                document.getElementById('course-3-2').value = s['3-2'] || 0;
-                document.getElementById('course-delete-btn').style.display = 'inline-block';
-            } else {
-                // 新增模式
-                document.getElementById('course-modal-title').textContent = '新增課程';
-                document.getElementById('course-name').value = '';
-                document.getElementById('course-domain').value = '國文/社會';
-                document.getElementById('course-1-1').value = 0;
-                document.getElementById('course-1-2').value = 0;
-                document.getElementById('course-2-1').value = 0;
-                document.getElementById('course-2-2').value = 0;
-                document.getElementById('course-3-1').value = 0;
-                document.getElementById('course-3-2').value = 0;
-                document.getElementById('course-delete-btn').style.display = 'none';
-            }
-
-            document.getElementById('course-modal').style.display = 'flex';
-        }
-
-        // 儲存課程
-        async function saveCourse() {
-            // 取得表單資料
-            const name = document.getElementById('course-name').value.trim();
-            if (!name) {
-                alert('請輸入課程名稱');
-                return;
-            }
-
-            const domain = document.getElementById('course-domain').value;
-            const semesters = {
-                '1-1': parseInt(document.getElementById('course-1-1').value) || 0,
-                '1-2': parseInt(document.getElementById('course-1-2').value) || 0,
-                '2-1': parseInt(document.getElementById('course-2-1').value) || 0,
-                '2-2': parseInt(document.getElementById('course-2-2').value) || 0,
-                '3-1': parseInt(document.getElementById('course-3-1').value) || 0,
-                '3-2': parseInt(document.getElementById('course-3-2').value) || 0
-            };
-
-            // 計算總節數
-            let credits = 0;
-            for (const key in semesters) {
-                credits += semesters[key];
-            }
-
-            // 找到目前的科系
-            const departments = getCurrentDepartments();
-            const dept = departments.find(function(d) {
-                return d.id === currentDeptId;
-            });
-            if (!dept) {
-                return;
-            }
-
-            // 建立課程資料
-            const courseData = {
-                name: name,
-                domain: domain,
-                semesters: semesters,
-                credits: credits
-            };
-
-            // 新增或更新
-            if (editingCourseIndex >= 0) {
-                dept.courses[editingCourseIndex] = courseData;
-            } else {
-                if (!dept.courses) {
-                    dept.courses = [];
-                }
-                dept.courses.push(courseData);
-            }
-
-            // 儲存到後端
-            await saveCoursesData();
-
-            // 關閉對話框並更新頁面
-            closeCourseModal();
-            renderCourses();
-            renderDomainStats();
-        }
-
-        // 刪除課程
-        async function deleteCourse() {
-            if (!confirm('確定要刪除這門課程嗎？')) {
-                return;
-            }
-
-            const departments = getCurrentDepartments();
-            const dept = departments.find(function(d) {
-                return d.id === currentDeptId;
-            });
-
-            if (!dept || editingCourseIndex < 0) {
-                return;
-            }
-
-            // 刪除課程
-            dept.courses.splice(editingCourseIndex, 1);
-
-            // 儲存到後端
-            await saveCoursesData();
-
-            // 關閉對話框並更新頁面
-            closeCourseModal();
-            renderCourses();
-            renderDomainStats();
-        }
-
-        // 儲存課程資料到後端
-        async function saveCoursesData() {
+            const body = { positions, substitute_count };
             try {
-                const response = await fetch('/api/courses', {
-                    method: 'POST',
+                const res = await fetch(`/api/year/${encodeURIComponent(currentData.year)}/domain/${encodeURIComponent(domainId)}`, {
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(coursesData)
+                    body: JSON.stringify(body),
                 });
-                const result = await response.json();
-                if (!result.success) {
-                    alert('儲存失敗：' + result.message);
+                const result = await res.json();
+                if (!res.ok || !result.success) {
+                    alert('儲存失敗：' + (result.message || res.status));
+                    return;
                 }
-            } catch (error) {
-                alert('網路錯誤');
+                tr.classList.add('saved');
+                setTimeout(() => tr.classList.remove('saved'), 1200);
+                await reload(currentData.year);
+            } catch (e) {
+                alert('網路錯誤，請稍後再試');
             }
         }
 
-        // 關閉課程對話框
-        function closeCourseModal() {
-            document.getElementById('course-modal').style.display = 'none';
-            editingCourseIndex = -1;
+        async function reload(year) {
+            const data = await fetchSummary(year);
+            if (!data) return;
+            currentData = data;
+            positionColumns = data.position_columns || [];
+
+            // merge positions into rows from excel_raw snapshot? No — we need per-year positions.
+            // /api/summary doesn't expose positions per year directly, so augment via extra fetch.
+            const extra = await fetch(`/api/year_positions?year=${encodeURIComponent(year)}`).then(r => r.ok ? r.json() : null).catch(() => null);
+            if (extra && extra.positions) {
+                data.rows.forEach(row => {
+                    row.positions_by_year = { [year]: extra.positions[row.domain_id] || {} };
+                });
+            } else {
+                data.rows.forEach(row => { row.positions_by_year = { [year]: {} }; });
+            }
+
+            renderHead();
+            tbody.innerHTML = '';
+            data.rows.forEach(row => tbody.appendChild(renderRow(row)));
+
+            titleEl.textContent = `${year} 學年度 — 員額編制`;
         }
 
-        // ============================================================
-        // 事件監聽
-        // ============================================================
-
-        function setupEventListeners() {
-            // 日間部/進修部切換
-            const schoolTabs = document.querySelectorAll('.school-tab');
-            schoolTabs.forEach(function(tab) {
-                tab.addEventListener('click', function() {
-                    // 更新按鈕狀態
-                    schoolTabs.forEach(function(t) {
-                        t.classList.remove('active');
-                    });
-                    tab.classList.add('active');
-
-                    // 切換學部
-                    currentSchool = tab.dataset.school;
-                    renderDepartmentTabs();
-                });
+        function populateYearSelect(years, defaultYear) {
+            yearSelect.innerHTML = '';
+            years.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y; opt.textContent = y + ' 學年度';
+                if (y === defaultYear) opt.selected = true;
+                yearSelect.appendChild(opt);
             });
+        }
 
-            // 課程對話框按鈕
-            document.getElementById('course-save-btn').addEventListener('click', saveCourse);
-            document.getElementById('course-cancel-btn').addEventListener('click', closeCourseModal);
-            document.getElementById('course-delete-btn').addEventListener('click', deleteCourse);
+        async function init() {
+            const first = await fetchSummary(null);
+            if (!first) return;
+            populateYearSelect(first.available_years, first.default_year);
+            await reload(first.year);
+        }
 
-            // 登入相關
-            const loginBtn = document.getElementById('login-btn');
-            if (loginBtn) {
-                loginBtn.addEventListener('click', function() {
-                    document.getElementById('login-modal').style.display = 'flex';
+        function openRemarkModal(row) {
+            editingDomainId = row.domain_id;
+            const remark = row.remark || {};
+            document.getElementById('remark-modal-title').textContent = `編輯備註 — ${row.domain_name}`;
+            document.getElementById('remark-name-list').value       = remark.name_list       || '';
+            document.getElementById('remark-substitute-note').value = remark.substitute_note || '';
+            document.getElementById('remark-remark-person').value   = remark.remark_person   || '';
+            document.getElementById('remark-remark-event').value    = remark.remark_event    || '';
+            document.getElementById('remark-future-note').value     = remark.future_note     || '';
+            document.getElementById('remark-error').style.display = 'none';
+            document.getElementById('remark-modal').style.display = 'flex';
+        }
+
+        function closeRemarkModal() {
+            document.getElementById('remark-modal').style.display = 'none';
+            editingDomainId = null;
+        }
+
+        async function saveRemark() {
+            if (!editingDomainId) return;
+            const body = {
+                name_list:       document.getElementById('remark-name-list').value,
+                substitute_note: document.getElementById('remark-substitute-note').value,
+                remark_person:   document.getElementById('remark-remark-person').value,
+                remark_event:    document.getElementById('remark-remark-event').value,
+                future_note:     document.getElementById('remark-future-note').value,
+            };
+            try {
+                const res = await fetch(`/api/domain_remark/${encodeURIComponent(editingDomainId)}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
                 });
-            }
-
-            const loginCancelBtn = document.getElementById('login-cancel-btn');
-            if (loginCancelBtn) {
-                loginCancelBtn.addEventListener('click', function() {
-                    document.getElementById('login-modal').style.display = 'none';
-                });
-            }
-
-            const loginSubmitBtn = document.getElementById('login-submit-btn');
-            if (loginSubmitBtn) {
-                loginSubmitBtn.addEventListener('click', async function() {
-                    const password = document.getElementById('password-input').value;
-                    try {
-                        const response = await fetch('/api/login', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ password: password })
-                        });
-                        const result = await response.json();
-                        if (result.success) {
-                            location.reload();
-                        } else {
-                            document.getElementById('login-error').textContent = result.message;
-                            document.getElementById('login-error').style.display = 'block';
-                        }
-                    } catch (error) {
-                        alert('登入失敗');
-                    }
-                });
-            }
-
-            const logoutBtn = document.getElementById('logout-btn');
-            if (logoutBtn) {
-                logoutBtn.addEventListener('click', async function() {
-                    await fetch('/api/logout', { method: 'POST' });
-                    location.reload();
-                });
+                const result = await res.json();
+                if (!res.ok || !result.success) {
+                    const err = document.getElementById('remark-error');
+                    err.textContent = result.message || '儲存失敗';
+                    err.style.display = 'block';
+                    return;
+                }
+                closeRemarkModal();
+                await reload(currentData.year);
+            } catch (e) {
+                const err = document.getElementById('remark-error');
+                err.textContent = '網路錯誤，請稍後再試';
+                err.style.display = 'block';
             }
         }
+
+        yearSelect.addEventListener('change', () => reload(yearSelect.value));
+
+        if (IS_ADMIN) {
+            document.getElementById('remark-save-btn').addEventListener('click', saveRemark);
+            document.getElementById('remark-cancel-btn').addEventListener('click', closeRemarkModal);
+            document.getElementById('remark-modal').addEventListener('click', (e) => {
+                if (e.target.id === 'remark-modal') closeRemarkModal();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+    })();
     </script>
 </body>
 </html>

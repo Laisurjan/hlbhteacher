@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師員額控管系統 - 課程節數表</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .toolbar { display:flex; gap:.8rem; align-items:center; margin: 1rem 0; flex-wrap:wrap; }
+        .toolbar label { font-weight:600; }
+        .toolbar select { padding:.35rem .5rem; font-size:1rem; }
+        .toolbar .hint { color:#888; font-size:.8rem; margin-left:.5rem; }
+
+        .tab-bar { display:flex; gap:.3rem; margin-top:.8rem; border-bottom:2px solid #ddd; }
+        .tab-bar button {
+            background:#f5f5f5; border:1px solid #ddd; border-bottom:none;
+            padding:.5rem 1.2rem; cursor:pointer; font-size:1rem; border-radius:6px 6px 0 0;
+        }
+        .tab-bar button.active {
+            background:#fff; font-weight:700; color:#1565c0; position: relative; top:2px;
+            border-color:#bbb;
+        }
+
+        .schedule-wrap { overflow:auto; max-height:78vh; border:1px solid #ccc; background:#fff; }
+        .schedule-table { border-collapse: collapse; font-size:.78rem; table-layout: fixed; }
+        .schedule-table th, .schedule-table td {
+            border:1px solid #ddd; padding:.18rem .25rem; text-align:center; vertical-align: middle;
+            min-width: 1.9rem;
+        }
+        .schedule-table thead th {
+            background:#f4f4f4; font-weight:600; position: sticky; top:0; z-index:5;
+        }
+        .schedule-table thead tr:nth-child(2) th { top:2.1rem; z-index:4; }
+        .schedule-table th.row-head, .schedule-table td.row-head {
+            position: sticky; left:0; background:#fafafa; z-index:3; text-align:center; min-width:2.2rem;
+        }
+        .schedule-table th.subject-head, .schedule-table td.subject-head {
+            position: sticky; left:2.2rem; background:#fafafa; z-index:3;
+            text-align:left; min-width:7.5rem; max-width:7.5rem; white-space:nowrap;
+            overflow:hidden; text-overflow: ellipsis;
+        }
+        .schedule-table thead th.row-head, .schedule-table thead th.subject-head { z-index:6; background:#eee; }
+
+        .schedule-table td.cell-editable { padding:0; }
+        .schedule-table td.cell-editable input {
+            width:100%; height:100%; min-width: 1.8rem; box-sizing: border-box;
+            border:none; padding: .25rem .15rem; text-align:center; font-size:.78rem;
+            background: transparent; -moz-appearance: textfield;
+        }
+        .schedule-table td.cell-editable input::-webkit-outer-spin-button,
+        .schedule-table td.cell-editable input::-webkit-inner-spin-button {
+            -webkit-appearance: none; margin:0;
+        }
+        .schedule-table td.cell-editable input:focus { outline: 2px solid #4f8cff; background:#fff; }
+        .schedule-table td.cell-saved { background:#e8f5e9; transition: background .6s; }
+        .schedule-table td.cell-error { background:#ffebee; }
+
+        .schedule-table tr.domain-header td {
+            background:#e3f2fd; font-weight:600; text-align:left;
+            padding:.35rem .5rem;
+        }
+        .schedule-table tr.domain-header .dom-tools { float:right; display:flex; gap:.3rem; }
+        .schedule-table tr.domain-total td { background:#fff8e1; font-weight:600; }
+        .schedule-table td.num-col, .schedule-table th.num-col { background:#fffde7; font-weight:600; }
+        .schedule-table td.sum-col, .schedule-table th.sum-col { background:#ffe0b2; font-weight:700; }
+        .schedule-table td.tail-annot, .tail-annot { font-size:.65rem; color:#b71c1c; margin-left:.2rem; }
+
+        .class-count-badge {
+            display:inline-block; margin-top:2px; font-size:.65rem; color:#1565c0;
+            background:#e3f2fd; border-radius:3px; padding:0 4px;
+        }
+        .class-count-edit { cursor:pointer; text-decoration: underline dotted; }
+
+        .inline-btn {
+            background:transparent; border:none; cursor:pointer; font-size:.8rem;
+            color:#555; padding:0 .25rem;
+        }
+        .inline-btn:hover { color:#1565c0; }
+        .inline-btn.danger:hover { color:#c62828; }
+
+        .subject-name-cell { display:flex; align-items:center; justify-content: space-between; gap:.2rem; }
+        .subject-name-text { flex:1; overflow:hidden; text-overflow: ellipsis; white-space:nowrap; }
+        .subject-tools { white-space:nowrap; }
+
+        .subject-empty { color:#bbb; font-style: italic; }
+        .badge-readonly {
+            display:inline-block; padding:.1rem .4rem; border-radius:3px;
+            background:#eceff1; color:#555; font-size:.7rem; margin-left:.5rem;
+        }
+
+        .new-year-modal .modal-content, .generic-modal .modal-content {
+            max-width:420px; width:90%;
+        }
+        .generic-modal .form-group, .new-year-modal .form-group { margin-bottom:.7rem; }
+        .generic-modal label, .new-year-modal label {
+            display:block; font-weight:600; margin-bottom:.25rem;
+        }
+        .generic-modal input, .generic-modal select,
+        .new-year-modal input, .new-year-modal select {
+            width:100%; padding:.4rem; font-size:1rem; box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>{{ settings.school_name | default('花蓮高商 — 教師員額控管系統') }}</h1>
+        </div>
+        <div class="nav-links">
+            <a href="/">節數總覽</a>
+            <a href="/courses">員額編制</a>
+            <a href="/schedule" class="active">課程節數</a>
+            <a href="/compare">年度比較</a>
+        </div>
+        <div class="nav-auth">
+            {% if is_admin %}
+            <span class="admin-badge">管理員模式</span>
+            <button id="logout-btn" class="btn btn-secondary">登出</button>
+            {% else %}
+            <button id="login-btn" class="btn btn-primary">教務主任登入</button>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="container">
+        <section class="page-header">
+            <h2 id="page-title">課程節數表</h2>
+            <p class="muted">
+                看每個班、每個科目一週要上幾節課。改完直接會存，首頁的需求節數也會跟著更新。
+                {% if not is_admin %}<span class="badge-readonly">僅檢視</span>{% endif %}
+            </p>
+
+            <div class="toolbar">
+                <label for="year-select">學年度：</label>
+                <select id="year-select"></select>
+                {% if is_admin %}
+                <button id="new-year-btn" class="btn btn-secondary" type="button">＋ 新學年</button>
+                {% endif %}
+                <span class="hint">小提示：按 Tab 可跳到下一格</span>
+            </div>
+
+            <div class="tab-bar">
+                <button id="tab-day" class="active" type="button">日校</button>
+                <button id="tab-evening" type="button">進修部</button>
+            </div>
+        </section>
+
+        <section class="schedule-section">
+            <div class="schedule-wrap" id="schedule-wrap">
+                <p class="muted" style="padding:1rem;">載入中…</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- 登入對話框 -->
+    <div class="modal" id="login-modal" style="display: none;">
+        <div class="modal-content">
+            <h3>教務主任登入</h3>
+            <p>請輸入管理密碼以進入編輯模式</p>
+            <input type="password" id="password-input" placeholder="請輸入密碼">
+            <div class="modal-buttons">
+                <button id="login-submit-btn" class="btn btn-primary">登入</button>
+                <button id="login-cancel-btn" class="btn btn-secondary">取消</button>
+            </div>
+            <p id="login-error" class="error-message" style="display: none;"></p>
+        </div>
+    </div>
+
+    {% if is_admin %}
+    <!-- 新學年對話框 -->
+    <div class="modal new-year-modal" id="new-year-modal" style="display: none;">
+        <div class="modal-content">
+            <h3>新增學年度</h3>
+            <p class="muted" style="font-size:.85rem;">
+                會複製所選年度的表格結構（科目、領域、班級），但所有節數歸零。
+            </p>
+            <div class="form-group">
+                <label for="new-year-code">新學年代碼（例：115）</label>
+                <input type="text" id="new-year-code" maxlength="3" placeholder="115">
+            </div>
+            <div class="form-group">
+                <label for="new-year-source">從哪個年度複製結構</label>
+                <select id="new-year-source"></select>
+            </div>
+            <div class="modal-buttons">
+                <button id="new-year-submit" class="btn btn-primary">建立</button>
+                <button id="new-year-cancel" class="btn btn-secondary">取消</button>
+            </div>
+            <p id="new-year-error" class="error-message" style="display:none;"></p>
+        </div>
+    </div>
+
+    <!-- 共用提示對話框（新增科目 / 改名 / 改班級數） -->
+    <div class="modal generic-modal" id="generic-modal" style="display:none;">
+        <div class="modal-content">
+            <h3 id="generic-modal-title">-</h3>
+            <p class="muted" id="generic-modal-hint" style="font-size:.85rem;"></p>
+            <div class="form-group">
+                <label id="generic-modal-label" for="generic-modal-input">-</label>
+                <input id="generic-modal-input" type="text">
+            </div>
+            <div class="modal-buttons">
+                <button id="generic-modal-submit" class="btn btn-primary">確定</button>
+                <button id="generic-modal-cancel" class="btn btn-secondary">取消</button>
+            </div>
+            <p id="generic-modal-error" class="error-message" style="display:none;"></p>
+        </div>
+    </div>
+    {% endif %}
+
+    <footer class="footer">
+        <p>教師員額控管系統 &copy; 2024</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+    (function () {
+        const IS_ADMIN   = {{ 'true' if is_admin else 'false' }};
+        const yearSelect = document.getElementById('year-select');
+        const wrap       = document.getElementById('schedule-wrap');
+        const tabDay     = document.getElementById('tab-day');
+        const tabEve     = document.getElementById('tab-evening');
+
+        let availableYears = {{ available_years|tojson }};
+        const defaultYear  = {{ default_year|tojson }};
+        let currentSchedule = null;
+        let currentYear = null;
+        let currentDomainNames = {};
+        let currentView = 'day';  // 'day' | 'evening'
+
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function populateYearSelect() {
+            yearSelect.innerHTML = '';
+            availableYears.forEach(function (y) {
+                const opt = document.createElement('option');
+                opt.value = y; opt.textContent = y + ' 學年度';
+                yearSelect.appendChild(opt);
+            });
+            if (currentYear && availableYears.indexOf(currentYear) >= 0) {
+                yearSelect.value = currentYear;
+            } else if (availableYears.length > 0) {
+                yearSelect.value = defaultYear && availableYears.indexOf(defaultYear) >= 0
+                    ? defaultYear : availableYears[availableYears.length - 1];
+            }
+        }
+
+        async function loadYear(year) {
+            wrap.innerHTML = '<p class="muted" style="padding:1rem;">載入中…</p>';
+            try {
+                const res = await fetch('/api/schedule/' + encodeURIComponent(year));
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    throw new Error(data.message || ('HTTP ' + res.status));
+                }
+                currentYear = year;
+                currentSchedule = data.schedule;
+                currentDomainNames = data.domain_names || {};
+                availableYears = data.available_years || availableYears;
+                populateYearSelect();
+                renderCurrentView();
+            } catch (e) {
+                wrap.innerHTML = '<p class="error-message" style="padding:1rem;">載入失敗：' + escapeHtml(e.message) + '</p>';
+            }
+        }
+
+        function setTab(view) {
+            currentView = view;
+            tabDay.classList.toggle('active', view === 'day');
+            tabEve.classList.toggle('active', view === 'evening');
+            renderCurrentView();
+        }
+
+        function renderCurrentView() {
+            if (currentView === 'evening') renderEveningGrid();
+            else renderDayGrid();
+        }
+
+        // ------------------------------------------------------------
+        // 日校 grid
+        // ------------------------------------------------------------
+        function buildClassGroups(classColumns) {
+            const groups = [];
+            let current = null;
+            classColumns.forEach(function (c) {
+                if (c.dept) {
+                    current = { dept: c.dept, cols: [c] };
+                    groups.push(current);
+                } else if (current) {
+                    current.cols.push(c);
+                } else {
+                    current = { dept: '', cols: [c] };
+                    groups.push(current);
+                }
+            });
+            return groups;
+        }
+
+        // 掃整張 day schedule 統整每欄的班級數（以第一個含該 col 的 weighted_up.coef 為準）
+        function collectClassCounts(day) {
+            const counts = {};
+            (day.domains || []).forEach(function (dom) {
+                (dom.subjects || []).forEach(function (s) {
+                    const up = (s.weighted_up || {}).coef || {};
+                    Object.keys(up).forEach(function (c) {
+                        if (counts[c] === undefined) counts[c] = up[c];
+                    });
+                    const dn = (s.weighted_down || {}).coef || {};
+                    Object.keys(dn).forEach(function (c) {
+                        if (counts[c] === undefined) counts[c] = dn[c];
+                    });
+                });
+            });
+            return counts;
+        }
+
+        function renderDayGrid() {
+            const day = currentSchedule && currentSchedule.day;
+            if (!day || !(day.domains || []).length) {
+                wrap.innerHTML = '<p class="muted" style="padding:1rem;">此學年度尚無日校資料。</p>';
+                return;
+            }
+            const classColumns = day.class_columns || [];
+            const layout = day.layout || {};
+            const groups = buildClassGroups(classColumns);
+            const classCounts = collectClassCounts(day);
+
+            let html = '<table class="schedule-table">';
+            html += '<thead><tr>';
+            html += '<th class="row-head" rowspan="2">列</th>';
+            html += '<th class="subject-head" rowspan="2">領域・科目</th>';
+            groups.forEach(function (g) {
+                html += '<th colspan="' + g.cols.length + '">' + escapeHtml(g.dept || '') + '</th>';
+            });
+            html += '<th class="num-col" rowspan="2">加權<br>上學期</th>';
+            html += '<th class="num-col" rowspan="2">加權<br>下學期</th>';
+            html += '<th class="sum-col"  rowspan="2">合計<br>上學期</th>';
+            html += '<th class="sum-col"  rowspan="2">合計<br>下學期</th>';
+            html += '</tr>';
+            html += '<tr>';
+            classColumns.forEach(function (c) {
+                const cnt = classCounts[c.col];
+                const badge = (cnt !== undefined)
+                    ? '<span class="class-count-badge' + (IS_ADMIN ? ' class-count-edit' : '') +
+                      '" data-col="' + escapeHtml(c.col) + '" data-count="' + cnt +
+                      '" title="' + (IS_ADMIN ? '點一下可改班級數' : '班級數') +
+                      '">×' + cnt + '</span>'
+                    : '';
+                html += '<th>' + escapeHtml(c.col) +
+                        '<br><span style="font-weight:400;color:#888;">' + escapeHtml(c.semester || '') + '</span>' +
+                        '<br>' + badge + '</th>';
+            });
+            html += '</tr></thead><tbody>';
+
+            const totalCols = 2 + classColumns.length + 4;
+            (day.domains || []).forEach(function (dom) {
+                const domainId = dom.domain_id || '';
+                const zhName = currentDomainNames[domainId] || domainId || '(未對映領域)';
+                const tools = IS_ADMIN
+                    ? '<span class="dom-tools"><button class="inline-btn add-subj-btn" ' +
+                      'data-domain-id="' + escapeHtml(domainId) + '">＋ 新增科目</button></span>'
+                    : '';
+                html += '<tr class="domain-header"><td colspan="' + totalCols + '">' +
+                        '【' + escapeHtml(zhName) + '】 ' +
+                        '<span class="muted" style="font-weight:400;font-size:.75rem;">' +
+                        'row ' + (dom.sum_row ?? '?') + ' / 科目 ' + (dom.subjects || []).length +
+                        '</span>' + tools + '</td></tr>';
+
+                (dom.subjects || []).forEach(function (subj) {
+                    html += renderDaySubjectRow(dom, subj, classColumns);
+                });
+
+                html += renderDayDomainTotal(dom, classColumns);
+            });
+            html += '</tbody></table>';
+            wrap.innerHTML = html;
+
+            if (IS_ADMIN) {
+                wrap.querySelectorAll('input.cell-input').forEach(function (inp) {
+                    inp.addEventListener('change', onDayCellChange);
+                    inp.addEventListener('blur', onDayCellChange);
+                });
+                wrap.querySelectorAll('.class-count-edit').forEach(function (el) {
+                    el.addEventListener('click', onClassCountClick);
+                });
+                wrap.querySelectorAll('.rename-subj-btn').forEach(function (b) {
+                    b.addEventListener('click', onRenameSubject);
+                });
+                wrap.querySelectorAll('.delete-subj-btn').forEach(function (b) {
+                    b.addEventListener('click', onDeleteSubject);
+                });
+                wrap.querySelectorAll('.add-subj-btn').forEach(function (b) {
+                    b.addEventListener('click', onAddSubject);
+                });
+            }
+        }
+
+        function renderDaySubjectRow(dom, subj, classColumns) {
+            const row = subj.row;
+            const cells = subj.cells || {};
+            const wu = (subj.weighted_up || {}).value;
+            const wd = (subj.weighted_down || {}).value;
+            const domainId = dom.domain_id || '';
+            let html = '<tr data-row="' + row + '" data-domain-id="' + escapeHtml(domainId) + '">';
+            html += '<td class="row-head">' + row + '</td>';
+            let nameCell = '<div class="subject-name-cell">' +
+                '<span class="subject-name-text" title="' + escapeHtml(subj.name || '') + '">' +
+                escapeHtml(subj.name || '') + '</span>';
+            if (IS_ADMIN) {
+                nameCell += '<span class="subject-tools">' +
+                    '<button class="inline-btn rename-subj-btn" title="改名" ' +
+                    'data-domain-id="' + escapeHtml(domainId) + '" data-row="' + row + '">✎</button>' +
+                    '<button class="inline-btn danger delete-subj-btn" title="刪除" ' +
+                    'data-domain-id="' + escapeHtml(domainId) + '" data-row="' + row + '">×</button>' +
+                    '</span>';
+            }
+            nameCell += '</div>';
+            html += '<td class="subject-head">' + nameCell + '</td>';
+            classColumns.forEach(function (c) {
+                const v = cells[c.col];
+                const shown = (v === undefined || v === null) ? '' : v;
+                if (IS_ADMIN) {
+                    html += '<td class="cell-editable" data-row="' + row +
+                            '" data-col="' + escapeHtml(c.col) + '">' +
+                            '<input class="cell-input" type="number" min="0" ' +
+                            'data-row="' + row + '" data-col="' + escapeHtml(c.col) +
+                            '" data-domain-id="' + escapeHtml(domainId) +
+                            '" value="' + (shown === '' ? '' : String(shown)) + '">' +
+                            '</td>';
+                } else {
+                    html += '<td>' + (shown === '' ? '<span class="subject-empty">·</span>' : shown) + '</td>';
+                }
+            });
+            html += '<td class="num-col" data-role="weighted-up" data-row="' + row + '">' + fmtNum(wu) + '</td>';
+            html += '<td class="num-col" data-role="weighted-down" data-row="' + row + '">' + fmtNum(wd) + '</td>';
+            html += '<td></td><td></td>';
+            html += '</tr>';
+            return html;
+        }
+
+        function renderDayDomainTotal(dom, classColumns) {
+            const domainId = dom.domain_id || '';
+            const sumUp = dom.sum_up || {};
+            const sumDown = dom.sum_down || {};
+            const tailUp = (sumUp.range || {}).tail || 0;
+            const tailDown = (sumDown.range || {}).tail || 0;
+            let html = '<tr class="domain-total" data-domain-id="' + escapeHtml(domainId) +
+                       '" data-role="domain-total">';
+            html += '<td class="row-head">—</td>';
+            html += '<td class="subject-head">合計</td>';
+            classColumns.forEach(function () { html += '<td></td>'; });
+            html += '<td></td><td></td>';
+            html += '<td class="sum-col" data-role="sum-up" data-domain-id="' + escapeHtml(domainId) + '">' +
+                    fmtNum(sumUp.value) + tailBadge(tailUp) + '</td>';
+            html += '<td class="sum-col" data-role="sum-down" data-domain-id="' + escapeHtml(domainId) + '">' +
+                    fmtNum(sumDown.value) + tailBadge(tailDown) + '</td>';
+            html += '</tr>';
+            return html;
+        }
+
+        function tailBadge(tail) {
+            if (!tail) return '';
+            const sign = tail > 0 ? '+' : '';
+            return '<span class="tail-annot">(' + sign + tail + ')</span>';
+        }
+
+        function fmtNum(v) {
+            if (v === null || v === undefined) return '-';
+            return String(v);
+        }
+
+        // ------------------------------------------------------------
+        // 進修部 grid
+        // ------------------------------------------------------------
+        function renderEveningGrid() {
+            const eve = currentSchedule && currentSchedule.evening;
+            if (!eve || !(eve.sections || []).length) {
+                wrap.innerHTML = '<p class="muted" style="padding:1rem;">此學年度尚無進修部資料。</p>';
+                return;
+            }
+            const classColumns = eve.class_columns || [];
+
+            // 進修部 class_columns 用 {dept, grade} 而非 {dept, semester}
+            const groups = [];
+            let cur = null;
+            classColumns.forEach(function (c) {
+                if (c.grade) {
+                    cur = { title: c.grade, cols: [c] };
+                    groups.push(cur);
+                } else if (cur) {
+                    cur.cols.push(c);
+                } else {
+                    cur = { title: '', cols: [c] };
+                    groups.push(cur);
+                }
+            });
+
+            let html = '<table class="schedule-table">';
+            html += '<thead><tr>';
+            html += '<th class="row-head" rowspan="2">列</th>';
+            html += '<th class="subject-head" rowspan="2">領域・科目</th>';
+            groups.forEach(function (g) {
+                html += '<th colspan="' + g.cols.length + '">' + escapeHtml(g.title || '') + '</th>';
+            });
+            html += '<th class="num-col" rowspan="2">小計<br>(J)</th>';
+            html += '<th class="sum-col" rowspan="2">總計<br>(K)</th>';
+            html += '</tr>';
+            html += '<tr>';
+            classColumns.forEach(function (c) {
+                html += '<th>' + escapeHtml(c.col) +
+                        '<br><span style="font-weight:400;color:#888;">' + escapeHtml(c.dept || '') + '</span></th>';
+            });
+            html += '</tr></thead><tbody>';
+
+            const totalCols = 2 + classColumns.length + 2;
+            (eve.sections || []).forEach(function (sec) {
+                html += '<tr class="domain-header"><td colspan="' + totalCols + '">' +
+                        '【' + escapeHtml(sec.section_key || '') + '】 ' +
+                        '<span class="muted" style="font-weight:400;font-size:.75rem;">' +
+                        '起始列 ' + (sec.start_row ?? '?') + ' / 科目 ' + (sec.subjects || []).length +
+                        '</span></td></tr>';
+
+                (sec.subjects || []).forEach(function (subj, idx) {
+                    html += renderEveSubjectRow(sec, subj, classColumns, idx);
+                });
+            });
+            html += '</tbody></table>';
+            wrap.innerHTML = html;
+
+            if (IS_ADMIN) {
+                wrap.querySelectorAll('input.eve-cell-input').forEach(function (inp) {
+                    inp.addEventListener('change', onEveCellChange);
+                    inp.addEventListener('blur', onEveCellChange);
+                });
+            }
+        }
+
+        function renderEveSubjectRow(section, subj, classColumns, idx) {
+            const row = subj.row;
+            const cells = subj.cells || {};
+            const secKey = section.section_key;
+            let html = '<tr data-row="' + row + '" data-section-key="' + escapeHtml(secKey) + '">';
+            html += '<td class="row-head">' + row + '</td>';
+            html += '<td class="subject-head" title="' + escapeHtml(subj.name || '') + '">' +
+                    escapeHtml(subj.name || '') + '</td>';
+            classColumns.forEach(function (c) {
+                const v = cells[c.col];
+                const shown = (v === undefined || v === null) ? '' : v;
+                if (IS_ADMIN) {
+                    html += '<td class="cell-editable" data-row="' + row +
+                            '" data-col="' + escapeHtml(c.col) + '">' +
+                            '<input class="eve-cell-input" type="number" min="0" ' +
+                            'data-row="' + row + '" data-col="' + escapeHtml(c.col) +
+                            '" data-section-key="' + escapeHtml(secKey) +
+                            '" value="' + (shown === '' ? '' : String(shown)) + '">' +
+                            '</td>';
+                } else {
+                    html += '<td>' + (shown === '' ? '<span class="subject-empty">·</span>' : shown) + '</td>';
+                }
+            });
+            html += '<td class="num-col" data-role="eve-subtotal" data-row="' + row + '">' + fmtNum(subj.subtotal_J) + '</td>';
+            const totalK = (idx === 0) ? subj.total_K : null;
+            html += '<td class="sum-col" data-role="eve-total-k" data-section-key="' + escapeHtml(secKey) + '">' +
+                    (idx === 0 ? fmtNum(totalK) : '') + '</td>';
+            html += '</tr>';
+            return html;
+        }
+
+        // ------------------------------------------------------------
+        // 日校 cell change
+        // ------------------------------------------------------------
+        async function onDayCellChange(evt) {
+            const inp = evt.target;
+            const row = inp.dataset.row;
+            const col = inp.dataset.col;
+            const domainId = inp.dataset.domainId;
+            const raw = inp.value.trim();
+            const valueToSend = (raw === '') ? null : raw;
+
+            const td = inp.parentElement;
+            td.classList.remove('cell-saved', 'cell-error');
+
+            try {
+                const res = await fetch('/api/schedule/' + encodeURIComponent(currentYear) +
+                    '/' + encodeURIComponent(domainId) + '/cell', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ row: Number(row), col: col, value: valueToSend }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    td.classList.add('cell-error');
+                    inp.title = data.message || ('HTTP ' + res.status);
+                    return;
+                }
+                inp.title = '';
+                td.classList.add('cell-saved');
+                setTimeout(function () { td.classList.remove('cell-saved'); }, 900);
+                applyDayResult(data);
+            } catch (e) {
+                td.classList.add('cell-error');
+                inp.title = '網路錯誤：' + e.message;
+            }
+        }
+
+        function applyDayResult(data) {
+            const row = data.row;
+            const wu = document.querySelector('td[data-role="weighted-up"][data-row="' + row + '"]');
+            const wd = document.querySelector('td[data-role="weighted-down"][data-row="' + row + '"]');
+            if (wu) wu.textContent = fmtNum(data.weighted_up_new);
+            if (wd) wd.textContent = fmtNum(data.weighted_down_new);
+            const did = data.domain_id;
+            const su = document.querySelector('td[data-role="sum-up"][data-domain-id="' + cssEscape(did) + '"]');
+            const sd = document.querySelector('td[data-role="sum-down"][data-domain-id="' + cssEscape(did) + '"]');
+            const dom = findDayDomainInCache(did, row);
+            const tailUp = (dom && dom.sum_up && dom.sum_up.range && dom.sum_up.range.tail) || 0;
+            const tailDown = (dom && dom.sum_down && dom.sum_down.range && dom.sum_down.range.tail) || 0;
+            if (su) su.innerHTML = fmtNum(data.sum_up_new) + tailBadge(tailUp);
+            if (sd) sd.innerHTML = fmtNum(data.sum_down_new) + tailBadge(tailDown);
+            // 更新本地快取
+            if (dom) {
+                const subj = (dom.subjects || []).find(function (s) { return s.row === row; });
+                if (subj) {
+                    subj.cells = subj.cells || {};
+                    if (data.value === null || data.value === undefined) delete subj.cells[data.col];
+                    else subj.cells[data.col] = data.value;
+                    if (subj.weighted_up) subj.weighted_up.value = data.weighted_up_new;
+                    if (subj.weighted_down) subj.weighted_down.value = data.weighted_down_new;
+                }
+                if (dom.sum_up) dom.sum_up.value = data.sum_up_new;
+                if (dom.sum_down) dom.sum_down.value = data.sum_down_new;
+            }
+        }
+
+        function findDayDomainInCache(domainId, row) {
+            if (!currentSchedule || !currentSchedule.day) return null;
+            const doms = currentSchedule.day.domains || [];
+            for (let i = 0; i < doms.length; i++) {
+                const d = doms[i];
+                if ((d.domain_id || '') !== domainId) continue;
+                if ((d.subjects || []).some(function (s) { return s.row === row; })) return d;
+            }
+            return doms.find(function (d) { return (d.domain_id || '') === domainId; }) || null;
+        }
+
+        // ------------------------------------------------------------
+        // 進修部 cell change
+        // ------------------------------------------------------------
+        async function onEveCellChange(evt) {
+            const inp = evt.target;
+            const row = inp.dataset.row;
+            const col = inp.dataset.col;
+            const secKey = inp.dataset.sectionKey;
+            const raw = inp.value.trim();
+            const valueToSend = (raw === '') ? null : raw;
+            const td = inp.parentElement;
+            td.classList.remove('cell-saved', 'cell-error');
+            try {
+                const res = await fetch('/api/schedule/' + encodeURIComponent(currentYear) +
+                    '/evening/' + encodeURIComponent(secKey) + '/cell', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ row: Number(row), col: col, value: valueToSend }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    td.classList.add('cell-error');
+                    inp.title = data.message || ('HTTP ' + res.status);
+                    return;
+                }
+                inp.title = '';
+                td.classList.add('cell-saved');
+                setTimeout(function () { td.classList.remove('cell-saved'); }, 900);
+                // 更新該 section 的每列 subtotal_J
+                Object.keys(data.subtotals_new || {}).forEach(function (r) {
+                    const cell = document.querySelector('td[data-role="eve-subtotal"][data-row="' + r + '"]');
+                    if (cell) cell.textContent = fmtNum(data.subtotals_new[r]);
+                });
+                // 更新 section 的 total_K（掛在起始列）
+                const kCell = document.querySelector('td[data-role="eve-total-k"][data-section-key="' + cssEscape(secKey) + '"]');
+                if (kCell) kCell.textContent = fmtNum(data.total_K_new);
+                // 更新本地快取
+                const sec = (currentSchedule.evening.sections || []).find(function (s) { return s.section_key === secKey; });
+                if (sec) {
+                    (sec.subjects || []).forEach(function (s, idx) {
+                        s.cells = s.cells || {};
+                        if (String(s.row) === String(row)) {
+                            if (data.value === null || data.value === undefined) delete s.cells[col];
+                            else s.cells[col] = data.value;
+                        }
+                        if (data.subtotals_new && data.subtotals_new[s.row] !== undefined) {
+                            s.subtotal_J = data.subtotals_new[s.row];
+                        }
+                        s.total_K = (idx === 0) ? data.total_K_new : null;
+                    });
+                }
+            } catch (e) {
+                td.classList.add('cell-error');
+                inp.title = '網路錯誤：' + e.message;
+            }
+        }
+
+        // ------------------------------------------------------------
+        // 共用：generic modal
+        // ------------------------------------------------------------
+        function openGenericModal(opts) {
+            if (!IS_ADMIN) return;
+            const modal  = document.getElementById('generic-modal');
+            const title  = document.getElementById('generic-modal-title');
+            const hint   = document.getElementById('generic-modal-hint');
+            const label  = document.getElementById('generic-modal-label');
+            const input  = document.getElementById('generic-modal-input');
+            const err    = document.getElementById('generic-modal-error');
+            const submit = document.getElementById('generic-modal-submit');
+            const cancel = document.getElementById('generic-modal-cancel');
+
+            title.textContent = opts.title || '';
+            hint.textContent  = opts.hint || '';
+            label.textContent = opts.label || '';
+            input.type  = opts.type || 'text';
+            input.value = opts.value == null ? '' : String(opts.value);
+            err.style.display = 'none';
+            err.textContent = '';
+            modal.style.display = 'flex';
+            setTimeout(function () { input.focus(); input.select && input.select(); }, 30);
+
+            function cleanup() {
+                modal.style.display = 'none';
+                submit.removeEventListener('click', handleSubmit);
+                cancel.removeEventListener('click', handleCancel);
+                modal.removeEventListener('click', handleBackdrop);
+                input.removeEventListener('keypress', handleKey);
+            }
+            function handleCancel() { cleanup(); }
+            function handleBackdrop(e) { if (e.target === modal) cleanup(); }
+            function handleKey(e) { if (e.key === 'Enter') handleSubmit(); }
+            async function handleSubmit() {
+                const val = input.value.trim();
+                try {
+                    await opts.onSubmit(val);
+                    cleanup();
+                } catch (e) {
+                    err.textContent = e.message || '操作失敗';
+                    err.style.display = 'block';
+                }
+            }
+            submit.addEventListener('click', handleSubmit);
+            cancel.addEventListener('click', handleCancel);
+            modal.addEventListener('click', handleBackdrop);
+            input.addEventListener('keypress', handleKey);
+        }
+
+        // ------------------------------------------------------------
+        // 科目改名 / 刪除 / 新增
+        // ------------------------------------------------------------
+        function onRenameSubject(evt) {
+            const btn = evt.currentTarget;
+            const domainId = btn.dataset.domainId;
+            const row = Number(btn.dataset.row);
+            const dom = findDayDomainInCache(domainId, row);
+            const subj = dom && (dom.subjects || []).find(function (s) { return s.row === row; });
+            if (!subj) return;
+            openGenericModal({
+                title: '改科目名稱',
+                label: '新名稱',
+                value: subj.name,
+                onSubmit: async function (val) {
+                    if (!val) throw new Error('名稱不可為空');
+                    const res = await fetch('/api/schedule/' + encodeURIComponent(currentYear) +
+                        '/' + encodeURIComponent(domainId) + '/subject/' + row, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: val }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) throw new Error(data.message || 'HTTP ' + res.status);
+                    await loadYear(currentYear);
+                },
+            });
+        }
+
+        async function onDeleteSubject(evt) {
+            const btn = evt.currentTarget;
+            const domainId = btn.dataset.domainId;
+            const row = Number(btn.dataset.row);
+            if (!confirm('確定刪除 row ' + row + ' 這個科目？（無法還原，但歷史資料留在 JSON backup）')) return;
+            try {
+                const res = await fetch('/api/schedule/' + encodeURIComponent(currentYear) +
+                    '/' + encodeURIComponent(domainId) + '/subject/' + row, {
+                    method: 'DELETE',
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    alert('刪除失敗：' + (data.message || res.status));
+                    return;
+                }
+                await loadYear(currentYear);
+            } catch (e) {
+                alert('網路錯誤：' + e.message);
+            }
+        }
+
+        function onAddSubject(evt) {
+            const btn = evt.currentTarget;
+            const domainId = btn.dataset.domainId;
+            openGenericModal({
+                title: '新增科目',
+                hint: '班級數係數（×N）會沿用此領域第一個科目的設定，之後可以再調整。',
+                label: '科目名稱',
+                onSubmit: async function (val) {
+                    if (!val) throw new Error('名稱不可為空');
+                    const res = await fetch('/api/schedule/' + encodeURIComponent(currentYear) +
+                        '/' + encodeURIComponent(domainId) + '/subject', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: val }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) throw new Error(data.message || 'HTTP ' + res.status);
+                    await loadYear(currentYear);
+                },
+            });
+        }
+
+        // ------------------------------------------------------------
+        // 班級數係數編輯
+        // ------------------------------------------------------------
+        function onClassCountClick(evt) {
+            const el = evt.currentTarget;
+            const col = el.dataset.col;
+            const cnt = el.dataset.count;
+            openGenericModal({
+                title: '調整班級數（欄 ' + col + '）',
+                hint: '改這一欄在所有科目的「×N」倍數。新學年班級總數改變時就改這裡。',
+                label: '新班級數',
+                type: 'number',
+                value: cnt,
+                onSubmit: async function (val) {
+                    if (val === '' || isNaN(Number(val))) throw new Error('請輸入整數');
+                    const res = await fetch('/api/schedule/' + encodeURIComponent(currentYear) +
+                        '/class_count/' + encodeURIComponent(col), {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ new_count: Number(val) }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) throw new Error(data.message || 'HTTP ' + res.status);
+                    await loadYear(currentYear);
+                },
+            });
+        }
+
+        function cssEscape(s) {
+            if (window.CSS && CSS.escape) return CSS.escape(String(s));
+            return String(s).replace(/"/g, '\\"');
+        }
+
+        // --- 新學年 modal ---
+        function setupNewYearModal() {
+            if (!IS_ADMIN) return;
+            const btn       = document.getElementById('new-year-btn');
+            const modal     = document.getElementById('new-year-modal');
+            const codeInp   = document.getElementById('new-year-code');
+            const sourceSel = document.getElementById('new-year-source');
+            const submit    = document.getElementById('new-year-submit');
+            const cancel    = document.getElementById('new-year-cancel');
+            const errEl     = document.getElementById('new-year-error');
+            if (!btn) return;
+
+            btn.addEventListener('click', function () {
+                sourceSel.innerHTML = '';
+                availableYears.forEach(function (y) {
+                    const opt = document.createElement('option');
+                    opt.value = y; opt.textContent = y + ' 學年度';
+                    sourceSel.appendChild(opt);
+                });
+                if (availableYears.length > 0) {
+                    sourceSel.value = availableYears[availableYears.length - 1];
+                }
+                codeInp.value = '';
+                errEl.style.display = 'none';
+                modal.style.display = 'flex';
+                codeInp.focus();
+            });
+            cancel.addEventListener('click', function () { modal.style.display = 'none'; });
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) modal.style.display = 'none';
+            });
+            submit.addEventListener('click', submitNewYear);
+
+            async function submitNewYear() {
+                const code = codeInp.value.trim();
+                const from = sourceSel.value;
+                if (!/^\d{3}$/.test(code)) {
+                    errEl.textContent = '學年代碼要 3 位數字（例：115）';
+                    errEl.style.display = 'block';
+                    return;
+                }
+                try {
+                    const res = await fetch('/api/year/' + encodeURIComponent(code), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ copy_structure_from: from }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.success) {
+                        errEl.textContent = data.message || ('HTTP ' + res.status);
+                        errEl.style.display = 'block';
+                        return;
+                    }
+                    modal.style.display = 'none';
+                    availableYears = data.available_years || availableYears;
+                    currentYear = data.year;
+                    populateYearSelect();
+                    yearSelect.value = data.year;
+                    loadYear(data.year);
+                } catch (e) {
+                    errEl.textContent = '網路錯誤：' + e.message;
+                    errEl.style.display = 'block';
+                }
+            }
+        }
+
+        yearSelect.addEventListener('change', function () { loadYear(yearSelect.value); });
+        tabDay.addEventListener('click', function () { setTab('day'); });
+        tabEve.addEventListener('click', function () { setTab('evening'); });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            populateYearSelect();
+            setupNewYearModal();
+            if (availableYears.length > 0) {
+                const y = yearSelect.value || defaultYear || availableYears[0];
+                loadYear(y);
+            } else {
+                wrap.innerHTML = '<p class="muted" style="padding:1rem;">尚無學年度資料。</p>';
+            }
+        });
+    })();
+    </script>
+</body>
+</html>

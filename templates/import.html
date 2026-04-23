@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>教師員額控管系統 - 匯入課綱</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <!-- 頁面頂部導覽列 -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h1>{{ settings.school_name | default('教師員額控管系統') }}</h1>
+        </div>
+        <div class="nav-links">
+            <a href="/">節數總覽</a>
+            <a href="/courses">課程管理</a>
+            <a href="/import" class="active">匯入課綱</a>
+            <a href="/compare">年度比較</a>
+        </div>
+        <div class="nav-auth">
+            <span class="admin-badge">管理員模式</span>
+            <button id="logout-btn" class="btn btn-secondary">登出</button>
+        </div>
+    </nav>
+
+    <!-- 主要內容區 -->
+    <main class="container">
+        <!-- 標題區塊 -->
+        <section class="page-header">
+            <h2>匯入課綱 PDF</h2>
+            <p>上傳課綱 PDF 檔案，系統會自動解析課程表格</p>
+        </section>
+
+        <!-- 上傳區塊 -->
+        <section class="upload-section">
+            <div class="upload-area" id="upload-area">
+                <div class="upload-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                </div>
+                <p class="upload-text">將 PDF 檔案拖曳到這裡</p>
+                <p class="upload-subtext">或點擊選擇檔案</p>
+                <input type="file" id="file-input" accept=".pdf" style="display: none;">
+            </div>
+
+            <div class="file-info" id="file-info" style="display: none;">
+                <p>已選擇檔案：<span id="file-name"></span></p>
+                <button id="upload-btn" class="btn btn-primary">開始解析</button>
+                <button id="clear-btn" class="btn btn-secondary">清除</button>
+            </div>
+        </section>
+
+        <!-- 解析進度 -->
+        <section class="progress-section" id="progress-section" style="display: none;">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <p class="progress-text" id="progress-text">解析中...</p>
+        </section>
+
+        <!-- 解析結果預覽 -->
+        <section class="result-section" id="result-section" style="display: none;">
+            <h3>解析結果預覽</h3>
+
+            <div class="result-summary">
+                <div class="summary-item">
+                    <span class="summary-label">PDF 頁數</span>
+                    <span class="summary-value" id="result-pages">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">找到表格數</span>
+                    <span class="summary-value" id="result-tables">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">解析課程數</span>
+                    <span class="summary-value" id="result-courses">0</span>
+                </div>
+            </div>
+
+            <!-- 課程預覽表格 -->
+            <div class="preview-table-container">
+                <table class="preview-table" id="preview-table">
+                    <thead>
+                        <tr>
+                            <th>課程名稱</th>
+                            <th>類別</th>
+                            <th>領域</th>
+                            <th>學分</th>
+                            <th>節數</th>
+                        </tr>
+                    </thead>
+                    <tbody id="preview-tbody">
+                        <!-- 動態載入 -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 原始表格資料（可展開） -->
+            <details class="raw-data-section">
+                <summary>查看原始表格資料</summary>
+                <pre id="raw-data"></pre>
+            </details>
+
+            <div class="result-actions">
+                <button id="confirm-import-btn" class="btn btn-primary">確認匯入</button>
+                <button id="cancel-import-btn" class="btn btn-secondary">取消</button>
+            </div>
+        </section>
+
+        <!-- 使用說明 -->
+        <section class="help-section">
+            <h3>使用說明</h3>
+            <ol>
+                <li><strong>上傳 PDF</strong>：選擇或拖曳課綱 PDF 檔案</li>
+                <li><strong>等待解析</strong>：系統會自動辨識 PDF 中的表格</li>
+                <li><strong>預覽結果</strong>：檢查解析結果是否正確</li>
+                <li><strong>確認匯入</strong>：將資料匯入系統</li>
+            </ol>
+
+            <div class="help-tips">
+                <h4>小提示</h4>
+                <ul>
+                    <li>PDF 中的表格越清晰，解析效果越好</li>
+                    <li>如果解析結果不正確，可以手動在「課程管理」頁面修改</li>
+                    <li>匯入前會備份現有資料</li>
+                </ul>
+            </div>
+        </section>
+    </main>
+
+    <!-- 頁尾 -->
+    <footer class="footer">
+        <p>教師員額控管系統 &copy; 2024</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // 變數：儲存解析結果
+        let parseResult = null;
+
+        // 拖曳上傳功能
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+
+        // 點擊上傳區域觸發檔案選擇
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        // 拖曳事件
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        // 檔案選擇事件
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // 處理選擇的檔案
+        function handleFile(file) {
+            if (!file.name.endsWith('.pdf')) {
+                alert('請選擇 PDF 格式的檔案');
+                return;
+            }
+
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-info').style.display = 'block';
+            uploadArea.style.display = 'none';
+        }
+
+        // 清除檔案
+        document.getElementById('clear-btn').addEventListener('click', () => {
+            fileInput.value = '';
+            document.getElementById('file-info').style.display = 'none';
+            uploadArea.style.display = 'flex';
+            document.getElementById('result-section').style.display = 'none';
+        });
+
+        // 開始解析
+        document.getElementById('upload-btn').addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('請先選擇檔案');
+                return;
+            }
+
+            // 顯示進度
+            document.getElementById('progress-section').style.display = 'block';
+            document.getElementById('file-info').style.display = 'none';
+
+            // 模擬進度
+            let progress = 0;
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+
+            const progressInterval = setInterval(() => {
+                progress += 10;
+                if (progress <= 90) {
+                    progressFill.style.width = progress + '%';
+                    progressText.textContent = `解析中... ${progress}%`;
+                }
+            }, 300);
+
+            // 上傳檔案
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/parse-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                clearInterval(progressInterval);
+                progressFill.style.width = '100%';
+                progressText.textContent = '解析完成！';
+
+                if (result.success) {
+                    parseResult = result.data;
+                    showParseResult(result.data);
+                } else {
+                    alert('解析失敗：' + result.message);
+                    resetUpload();
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                alert('上傳失敗：' + error.message);
+                resetUpload();
+            }
+        });
+
+        // 顯示解析結果
+        function showParseResult(data) {
+            setTimeout(() => {
+                document.getElementById('progress-section').style.display = 'none';
+                document.getElementById('result-section').style.display = 'block';
+
+                // 填入統計數據
+                document.getElementById('result-pages').textContent = data.pages_count || 0;
+                document.getElementById('result-tables').textContent = data.tables_found || 0;
+                document.getElementById('result-courses').textContent = data.courses ? data.courses.length : 0;
+
+                // 填入課程預覽表格
+                const tbody = document.getElementById('preview-tbody');
+                tbody.innerHTML = '';
+
+                if (data.courses && data.courses.length > 0) {
+                    data.courses.forEach(course => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td>${course.name || '-'}</td>
+                            <td>${course.category || '-'}</td>
+                            <td>${course.domain || '-'}</td>
+                            <td>${course.credits || 0}</td>
+                            <td>${course.hours || 0}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5">未解析到課程資料</td></tr>';
+                }
+
+                // 原始資料
+                document.getElementById('raw-data').textContent = JSON.stringify(data.raw_tables, null, 2);
+            }, 500);
+        }
+
+        // 重置上傳區域
+        function resetUpload() {
+            document.getElementById('progress-section').style.display = 'none';
+            document.getElementById('file-info').style.display = 'none';
+            uploadArea.style.display = 'flex';
+            fileInput.value = '';
+        }
+
+        // 確認匯入
+        document.getElementById('confirm-import-btn').addEventListener('click', async () => {
+            if (!parseResult || !parseResult.courses || parseResult.courses.length === 0) {
+                alert('沒有可匯入的課程資料');
+                return;
+            }
+
+            if (!confirm('確定要匯入這些課程嗎？')) {
+                return;
+            }
+
+            // TODO: 實作匯入功能
+            alert('匯入功能開發中');
+        });
+
+        // 取消匯入
+        document.getElementById('cancel-import-btn').addEventListener('click', resetUpload);
+    </script>
+</body>
+</html>

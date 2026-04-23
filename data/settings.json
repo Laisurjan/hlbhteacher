@@ -1,5 +1,5 @@
 {
-  "admin_password": "admin123",
+  "admin_password_sha256": "240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9",
   "school_name": "國立花蓮高級商業職業學校",
   "current_school_year": 115,
   "available_years": [113, 114, 115],
