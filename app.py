@@ -18,6 +18,7 @@ from datetime import datetime
 
 from utils.calculator import calc_summary
 from utils.schedule_eval import apply_cell_edit
+from utils import github_sync
 
 # 建立 Flask 應用程式
 app = Flask(__name__)
@@ -71,6 +72,9 @@ def save_json_file(filepath, data):
             # indent=2 讓 JSON 格式更易讀
             # ensure_ascii=False 讓中文正常顯示
             json.dump(data, f, ensure_ascii=False, indent=2)
+        # 成功寫入後，若此檔是要同步到 GitHub 的目標，觸發背景 push（debounced）
+        if os.path.abspath(filepath) == os.path.abspath(SCHOOL_DATA_FILE):
+            github_sync.schedule_push(filepath)
         return True
     except Exception as e:
         print(f"儲存檔案時發生錯誤：{e}")
@@ -84,6 +88,18 @@ def is_admin():
         True 表示是管理員，False 表示不是
     """
     return session.get('is_admin', False)
+
+
+# ============================================================
+# 啟動時從 GitHub 拉最新資料（僅在 Render 等雲端環境啟用）
+# 本機開發不會設 GITHUB_SYNC_ENABLED=1，所以 pull_latest_on_boot 會 no-op
+# Flask debug 模式下 reloader 會 fork 兩次，用 WERKZEUG_RUN_MAIN 避免重複
+# ============================================================
+if github_sync.is_enabled() and os.environ.get('WERKZEUG_RUN_MAIN') != 'false':
+    try:
+        github_sync.pull_latest_on_boot(SCHOOL_DATA_FILE)
+    except Exception as e:
+        print(f'[github_sync] 啟動拉取發生例外：{e}')
 
 
 # ============================================================
