@@ -38,11 +38,11 @@
             <a href="/compare">年度比較</a>
         </div>
         <div class="nav-auth">
-            {% if is_admin %}
-            <span class="admin-badge">管理員模式</span>
+            {% if current_user %}
+            <span class="user-badge">{{ current_user.name }}{% if is_admin %} <small>(管理員)</small>{% endif %}</span>
             <button id="logout-btn" class="btn btn-secondary">登出</button>
             {% else %}
-            <button id="login-btn" class="btn btn-primary">教務主任登入</button>
+            <a href="{{ url_for('login_page') }}" class="btn btn-primary">登入</a>
             {% endif %}
         </div>
     </nav>
@@ -52,7 +52,7 @@
             <h2 id="page-title">員額編制 — 依學年度編輯</h2>
             <p class="muted">
                 每個領域這學年有幾位主任、組長、導師、專任以及代理老師。
-                {% if is_admin %}改完某一列後按「儲存」，首頁的節數差會跟著重算。{% else %}需教務主任登入後才能編輯。{% endif %}
+                {% if is_admin %}改完某一列後按「儲存」，首頁的節數差會跟著重算。{% else %}需管理員登入後才能編輯。{% endif %}
             </p>
 
             <div class="toolbar">
@@ -70,20 +70,6 @@
             </table>
         </section>
     </main>
-
-    <!-- 登入對話框 -->
-    <div class="modal" id="login-modal" style="display: none;">
-        <div class="modal-content">
-            <h3>教務主任登入</h3>
-            <p>請輸入管理密碼以進入編輯模式</p>
-            <input type="password" id="password-input" placeholder="請輸入密碼">
-            <div class="modal-buttons">
-                <button id="login-submit-btn" class="btn btn-primary">登入</button>
-                <button id="login-cancel-btn" class="btn btn-secondary">取消</button>
-            </div>
-            <p id="login-error" class="error-message" style="display: none;"></p>
-        </div>
-    </div>
 
     <!-- 備註編輯對話框 -->
     <div class="modal remark-modal" id="remark-modal" style="display: none;">

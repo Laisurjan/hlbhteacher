@@ -10,20 +10,23 @@
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import copy
-import hashlib
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from utils.calculator import calc_summary
 from utils.schedule_eval import apply_cell_edit
 from utils import github_sync
+from utils import auth as auth_mod
+from utils.auth import require_viewer, require_admin
 
 # 建立 Flask 應用程式
 app = Flask(__name__)
-# 設定 session 密鑰（用於登入狀態）
-app.secret_key = 'teacher_quota_system_secret_key_2024'
+# 設定 session 密鑰（用於登入狀態）；Render 可用環境變數覆蓋避免重啟後 session 失效
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'teacher_quota_system_secret_key_2024')
+# session 保留 30 天（瀏覽器關掉重開還在）
+app.permanent_session_lifetime = timedelta(days=30)
 
 # ============================================================
 # 資料檔案路徑設定
@@ -82,12 +85,13 @@ def save_json_file(filepath, data):
 
 
 def is_admin():
-    """檢查目前使用者是否為管理員（教務主任）
+    """代理到 utils.auth：目前 session 裡的角色是否為 admin"""
+    return auth_mod.is_admin()
 
-    Returns:
-        True 表示是管理員，False 表示不是
-    """
-    return session.get('is_admin', False)
+
+def current_user_payload():
+    """給模板用的目前使用者資訊；未登入為 None"""
+    return auth_mod.current_user()
 
 
 # ============================================================
@@ -107,42 +111,35 @@ if github_sync.is_enabled() and os.environ.get('WERKZEUG_RUN_MAIN') != 'false':
 # ============================================================
 
 @app.route('/')
+@require_viewer
 def index():
-    """首頁 - 節數總覽
-
-    顯示各領域的基本節數與需求節數對照表
-    """
+    """首頁 - 節數總覽"""
     teachers_data = load_json_file(TEACHERS_FILE)
     settings = load_json_file(SETTINGS_FILE)
-
     return render_template('index.html',
                          teachers=teachers_data,
                          settings=settings,
-                         is_admin=is_admin())
+                         is_admin=is_admin(),
+                         current_user=current_user_payload())
 
 
 @app.route('/courses')
+@require_viewer
 def courses():
-    """課程管理頁面
-
-    顯示各科系的課程列表，管理員可以編輯
-    """
+    """課程管理頁面"""
     courses_data = load_json_file(COURSES_FILE)
     settings = load_json_file(SETTINGS_FILE)
-
     return render_template('courses.html',
                          courses=courses_data,
                          settings=settings,
-                         is_admin=is_admin())
+                         is_admin=is_admin(),
+                         current_user=current_user_payload())
 
 
 @app.route('/schedule')
+@require_viewer
 def schedule_page():
-    """課程節數編輯頁（xlsx-style grid editor）
-
-    日校課程節數預估表的可編輯版本，admin 可以改每個 cell，
-    變動自動重算 weighted/sum/required_day，寫回 school_data.json。
-    """
+    """課程節數編輯頁（xlsx-style grid editor）"""
     settings = load_json_file(SETTINGS_FILE)
     school_data = load_json_file(SCHOOL_DATA_FILE)
     available_years = school_data.get('available_years', []) if school_data else []
@@ -151,55 +148,65 @@ def schedule_page():
                            settings=settings,
                            available_years=available_years,
                            default_year=default_year,
-                           is_admin=is_admin())
+                           is_admin=is_admin(),
+                           current_user=current_user_payload())
 
 
 @app.route('/compare')
+@require_viewer
 def compare():
-    """年度比較頁面
-
-    比較不同學年度的課程差異
-    """
+    """年度比較頁面"""
     settings = load_json_file(SETTINGS_FILE)
     school_data = load_json_file(SCHOOL_DATA_FILE)
     available_years = school_data.get('available_years', []) if school_data else []
     return render_template('compare.html',
                          settings=settings,
                          available_years=available_years,
-                         is_admin=is_admin())
+                         is_admin=is_admin(),
+                         current_user=current_user_payload())
 
 
 # ============================================================
 # API 路由（給前端 JavaScript 使用）
 # ============================================================
 
-@app.route('/api/login', methods=['POST'])
-def api_login():
-    """登入 API
+@app.route('/login')
+def login_page():
+    """登入頁（Google Sign-In）"""
+    client_id = os.environ.get('GOOGLE_CLIENT_ID', '').strip()
+    return render_template('login.html', google_client_id=client_id)
 
-    驗證密碼，成功則設定 session
-    """
+
+@app.route('/api/google_login', methods=['POST'])
+def api_google_login():
+    """驗證 Google ID token，成功則設定 session"""
     data = request.get_json() or {}
-    password = data.get('password', '')
-
-    settings = load_json_file(SETTINGS_FILE)
-    stored_hash = settings.get('admin_password_sha256', '')
-    attempt_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
-
-    if stored_hash and attempt_hash == stored_hash:
-        session['is_admin'] = True
-        return jsonify({'success': True, 'message': '登入成功'})
-    return jsonify({'success': False, 'message': '密碼錯誤'})
+    token = data.get('credential', '')
+    email, name = auth_mod.verify_google_id_token(token)
+    if not email:
+        return jsonify({'success': False, 'message': 'Google 驗證失敗或尚未設定 GOOGLE_CLIENT_ID'}), 401
+    if not auth_mod.login(email, name):
+        return jsonify({
+            'success': False,
+            'message': f'帳號 {email} 非校內帳號或未獲授權',
+        }), 403
+    return jsonify({
+        'success': True,
+        'user': auth_mod.current_user(),
+    })
 
 
 @app.route('/api/logout', methods=['POST'])
 def api_logout():
-    """登出 API
-
-    清除 session 中的管理員狀態
-    """
-    session.pop('is_admin', None)
+    """登出：清除 session"""
+    auth_mod.logout()
     return jsonify({'success': True, 'message': '已登出'})
+
+
+@app.route('/api/me', methods=['GET'])
+def api_me():
+    """回目前登入者資訊；未登入回 user=null"""
+    return jsonify({'user': auth_mod.current_user()})
 
 
 _REMARK_FIELDS = (
@@ -257,6 +264,7 @@ def api_update_domain_remark(domain_id):
 
 
 @app.route('/api/year_positions', methods=['GET'])
+@require_viewer
 def api_get_year_positions():
     """回傳指定學年度每個領域的職務人數與代理人數（給員額編制頁用）。"""
     school_data = load_json_file(SCHOOL_DATA_FILE)
@@ -584,6 +592,7 @@ def _make_empty_year_state(source_state, new_year):
 
 
 @app.route('/api/schedule/<year>', methods=['GET'])
+@require_viewer
 def api_get_schedule(year):
     """取得指定學年度的課程節數資料（唯讀）。"""
     school_data = load_json_file(SCHOOL_DATA_FILE)
@@ -1058,6 +1067,7 @@ def api_create_year(year):
 
 
 @app.route('/api/settings', methods=['GET'])
+@require_viewer
 def api_get_settings():
     """取得系統設定 API"""
     settings = load_json_file(SETTINGS_FILE)
@@ -1077,6 +1087,7 @@ def _parse_bool_flag(raw: str | None) -> bool:
 
 
 @app.route('/api/summary', methods=['GET'])
+@require_viewer
 def api_get_summary():
     """節數總覽（以 school_data.json 為來源，逐格復刻 Excel）。
 

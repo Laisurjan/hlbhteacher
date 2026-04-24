@@ -115,6 +115,21 @@ body {
     font-weight: 500;
 }
 
+.user-badge {
+    background-color: #e3f2fd;
+    color: #1565c0;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-right: var(--spacing-sm);
+}
+.user-badge small {
+    color: #2e7d32;
+    margin-left: 4px;
+    font-weight: 600;
+}
+
 /* ============================================================
    3. 按鈕樣式
    ============================================================ */

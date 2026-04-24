@@ -30,7 +30,9 @@ def _load():
 
 def _login(client):
     with client.session_transaction() as sess:
-        sess["is_admin"] = True
+        sess["user_email"] = "academy@hlbh.hlc.edu.tw"
+        sess["user_name"] = "test-admin"
+        sess["user_role"] = "admin"
 
 
 def _check(label, cond, detail=""):

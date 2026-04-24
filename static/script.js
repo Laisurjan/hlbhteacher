@@ -8,115 +8,28 @@
  */
 
 // ============================================================
-// 登入/登出功能
+// 登出功能（登入走 Google Sign-In，由 /login 頁處理）
 // ============================================================
 
 /**
- * 設定登入按鈕的點擊事件
- * 點擊後會顯示登入對話框
+ * 占位：舊版密碼登入已移除，保留函數避免其他地方呼叫時出錯
  */
-function setupLoginButton() {
-    const loginBtn = document.getElementById('login-btn');
-    const loginModal = document.getElementById('login-modal');
-    const loginSubmitBtn = document.getElementById('login-submit-btn');
-    const loginCancelBtn = document.getElementById('login-cancel-btn');
-    const passwordInput = document.getElementById('password-input');
-    const loginError = document.getElementById('login-error');
-
-    // 如果頁面沒有登入按鈕，就不執行
-    if (!loginBtn) return;
-
-    // 點擊登入按鈕，顯示對話框
-    loginBtn.addEventListener('click', function() {
-        loginModal.style.display = 'flex';
-        passwordInput.value = '';
-        loginError.style.display = 'none';
-        passwordInput.focus();
-    });
-
-    // 點擊取消按鈕，關閉對話框
-    loginCancelBtn.addEventListener('click', function() {
-        loginModal.style.display = 'none';
-    });
-
-    // 點擊對話框外面，也關閉對話框
-    loginModal.addEventListener('click', function(e) {
-        if (e.target === loginModal) {
-            loginModal.style.display = 'none';
-        }
-    });
-
-    // 按 Enter 鍵也可以登入
-    passwordInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            loginSubmitBtn.click();
-        }
-    });
-
-    // 點擊登入提交按鈕
-    loginSubmitBtn.addEventListener('click', async function() {
-        const password = passwordInput.value;
-
-        if (!password) {
-            showLoginError('請輸入密碼');
-            return;
-        }
-
-        try {
-            // 送出登入請求到後端
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ password: password })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                // 登入成功，重新載入頁面
-                window.location.reload();
-            } else {
-                // 登入失敗，顯示錯誤訊息
-                showLoginError(result.message || '登入失敗');
-            }
-        } catch (error) {
-            showLoginError('網路錯誤，請稍後再試');
-        }
-    });
-
-    /**
-     * 顯示登入錯誤訊息
-     */
-    function showLoginError(message) {
-        loginError.textContent = message;
-        loginError.style.display = 'block';
-        passwordInput.focus();
-        passwordInput.select();
-    }
-}
+function setupLoginButton() { /* 已遷移至 /login 頁 */ }
 
 /**
  * 設定登出按鈕的點擊事件
  */
 function setupLogoutButton() {
     const logoutBtn = document.getElementById('logout-btn');
-
-    // 如果頁面沒有登出按鈕，就不執行
     if (!logoutBtn) return;
 
     logoutBtn.addEventListener('click', async function() {
         try {
-            const response = await fetch('/api/logout', {
-                method: 'POST'
-            });
-
+            const response = await fetch('/api/logout', { method: 'POST' });
             const result = await response.json();
-
             if (result.success) {
-                // 登出成功，重新載入頁面
-                window.location.reload();
+                // 登出後回到登入頁
+                window.location.href = '/login';
             }
         } catch (error) {
             alert('登出失敗，請稍後再試');

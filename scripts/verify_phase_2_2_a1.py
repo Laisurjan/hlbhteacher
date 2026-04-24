@@ -32,9 +32,11 @@ def _load():
 
 
 def _login(client):
-    # 測試用：直接寫 session（不走 /api/login 避免撞 settings hash）
+    # 測試用：直接寫 session（不走 Google 真實登入）
     with client.session_transaction() as sess:
-        sess["is_admin"] = True
+        sess["user_email"] = "academy@hlbh.hlc.edu.tw"
+        sess["user_name"] = "test-admin"
+        sess["user_role"] = "admin"
 
 
 def _check(label, cond, detail=""):
@@ -58,15 +60,11 @@ def run():
 def _run_tests():
     client = app.test_client()
 
-    print("\n=== 1) GET /api/schedule/113 ===")
+    print("\n=== 0) GET /api/schedule/113  (未登入→401) ===")
     res = client.get("/api/schedule/113")
-    data = res.get_json()
-    _check("status=200", res.status_code == 200, f"status={res.status_code}")
-    _check("success=True", data.get("success") is True)
-    _check("schedule.day 含 domains", len(data["schedule"]["day"].get("domains", [])) > 0)
-    _check("含 domain_names", bool(data.get("domain_names")))
+    _check("未登入回 401", res.status_code == 401, f"status={res.status_code}")
 
-    print("\n=== 2) PUT /api/schedule/113/chinese_social/cell  (未登入→403) ===")
+    print("\n=== 0b) PUT /api/schedule/113/chinese_social/cell  (未登入→403) ===")
     res = client.put(
         "/api/schedule/113/chinese_social/cell",
         json={"row": 5, "col": "F", "value": 5},
@@ -74,6 +72,14 @@ def _run_tests():
     _check("未登入回 403", res.status_code == 403, f"status={res.status_code}")
 
     _login(client)
+
+    print("\n=== 1) GET /api/schedule/113 ===")
+    res = client.get("/api/schedule/113")
+    data = res.get_json()
+    _check("status=200", res.status_code == 200, f"status={res.status_code}")
+    _check("success=True", data.get("success") is True)
+    _check("schedule.day 含 domains", len(data["schedule"]["day"].get("domains", [])) > 0)
+    _check("含 domain_names", bool(data.get("domain_names")))
 
     print("\n=== 3) PUT /api/schedule/113/chinese_social/cell  (F5: 3→5，應 +4 節) ===")
     snap_before = _load()
