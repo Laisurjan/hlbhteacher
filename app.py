@@ -21,6 +21,13 @@ from utils import github_sync
 from utils import auth as auth_mod
 from utils.auth import require_viewer, require_admin
 
+# 啟動時印出 google-auth 狀態，方便在 Render logs 確認套件是否正確安裝
+try:
+    import google.auth as _ga
+    print(f'[boot] google-auth OK, version={getattr(_ga, "__version__", "?")}')
+except ImportError as _e:
+    print(f'[boot] google-auth IMPORT FAIL: {_e}')
+
 # 建立 Flask 應用程式
 app = Flask(__name__)
 # 設定 session 密鑰（用於登入狀態）；Render 可用環境變數覆蓋避免重啟後 session 失效
